@@ -1,4 +1,4 @@
--- Kintore Memo: Phase 2 schema for Supabase (Postgres).
+-- Gym Bro: Phase 2 schema for Supabase (Postgres).
 -- Run the whole file once in Supabase Dashboard > SQL Editor.
 -- Safe to re-run: uses IF NOT EXISTS / CREATE OR REPLACE / DROP POLICY IF EXISTS.
 
@@ -50,18 +50,22 @@ create table if not exists public.shared_workouts (
 create index if not exists shared_workouts_user_date_idx on public.shared_workouts (user_id, date desc);
 create index if not exists shared_workouts_date_idx on public.shared_workouts (date desc);
 
--- Teams-style reactions: a user can add several different emoji to one workout.
+-- Reactions: one per user per workout (like Teams, choosing another emoji replaces yours).
 create table if not exists public.reactions (
   workout_id uuid not null references public.shared_workouts(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   emoji text not null default '👍',
   created_at timestamptz not null default now(),
-  primary key (workout_id, user_id, emoji)
+  primary key (workout_id, user_id)
 );
--- Upgrade path for databases created with the older one-like-per-user layout.
+-- Upgrade path for older layouts (one like per user, or several emoji per user).
 alter table public.reactions add column if not exists emoji text not null default '👍';
+-- If someone already left several reactions on one workout, keep only the newest.
+delete from public.reactions r using public.reactions r2
+  where r.workout_id = r2.workout_id and r.user_id = r2.user_id
+    and (r.created_at, r.emoji) < (r2.created_at, r2.emoji);
 alter table public.reactions drop constraint if exists reactions_pkey;
-alter table public.reactions add primary key (workout_id, user_id, emoji);
+alter table public.reactions add primary key (workout_id, user_id);
 alter table public.reactions drop constraint if exists reactions_emoji_check;
 alter table public.reactions add constraint reactions_emoji_check check (emoji in ('👍', '❤️', '😂', '😮', '😢', '💪', '🔥'));
 
@@ -176,6 +180,10 @@ create policy reactions_select on public.reactions for select to authenticated
 drop policy if exists reactions_insert on public.reactions;
 create policy reactions_insert on public.reactions for insert to authenticated
   with check (user_id = auth.uid() and public.can_see_workout(workout_id));
+drop policy if exists reactions_update on public.reactions;
+create policy reactions_update on public.reactions for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid() and public.can_see_workout(workout_id));
 drop policy if exists reactions_delete on public.reactions;
 create policy reactions_delete on public.reactions for delete to authenticated
   using (user_id = auth.uid());
@@ -197,7 +205,7 @@ grant select, update on public.profiles to authenticated;
 grant select on public.invite_codes to authenticated;
 grant select, delete on public.friendships to authenticated;
 grant select, insert, update, delete on public.shared_workouts to authenticated;
-grant select, insert, delete on public.reactions to authenticated;
+grant select, insert, update, delete on public.reactions to authenticated;
 grant select, insert, delete on public.comments to authenticated;
 revoke all on function public.create_profile(text, text) from public, anon;
 revoke all on function public.add_friend_by_code(text) from public, anon;

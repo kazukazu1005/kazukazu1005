@@ -39,7 +39,7 @@ function ReactionBar({ it, me, act }: { it: FeedItem; me: Profile; act: (f: () =
           className="react-pill"
           aria-pressed={g.mine}
           title={g.names.join(', ')}
-          aria-label={`${g.emoji} ${g.count}: ${g.names.join(', ')}. ${g.mine ? 'Remove your reaction' : 'React'}`}
+          aria-label={`${g.emoji} ${g.count}: ${g.names.join(', ')}. ${g.mine ? 'Remove your reaction' : 'Switch your reaction to this'}`}
           onClick={() => toggle(g.emoji, g.mine)}
         >
           <span aria-hidden="true">{g.emoji}</span> {g.count}
@@ -85,13 +85,14 @@ function CommentBox({ onSend }: { onSend: (body: string) => Promise<void> }) {
  * `act` runs a server action and then reloads the list.
  */
 export default function SharedCard({
-  it, me, act, detail, onOpenAuthor,
+  it, me, act, detail, onOpenAuthor, isNew,
 }: {
   it: FeedItem
   me: Profile
   act: (f: () => Promise<void>) => Promise<void>
   detail?: boolean
   onOpenAuthor?: (p: Profile) => void
+  isNew?: boolean
 }) {
   const author = it.profiles
   const name = author?.display_name || author?.username
@@ -105,7 +106,7 @@ export default function SharedCard({
           ) : name}{' '}
           <span className="sub">@{author?.username}</span>
         </h3>
-        <span className="sub">{it.date}</span>
+        <span className="row" style={{ gap: 8 }}>{isNew && <span className="badge">New</span>}<span className="sub">{it.date}</span></span>
       </div>
       {it.title && <p style={{ margin: '4px 0', fontWeight: 600 }}>{it.title}</p>}
       {it.data.entries.filter((e) => e.kind === 'weight' || e.kind === 'bodyweight').map((e, i) => (

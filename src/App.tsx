@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppData } from './data'
 import { syncPending, useAuth } from './social'
+import { useFriendActivity } from './activity'
 import Home from './screens/Home'
 import Editor from './screens/Editor'
 import Progress from './screens/Progress'
@@ -19,6 +20,7 @@ export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' })
 
   const userId = auth.session?.user.id
+  const activity = useFriendActivity(userId, sharingConfigured && !!auth.profile)
   useEffect(() => {
     if (userId && auth.profile && data.ready) void syncPending(userId, data.workouts, data.exercises)
   }, [userId, auth.profile, data.ready, data.workouts, data.exercises])
@@ -34,7 +36,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="top row spread">
-        <h1>Kintore Memo</h1>
+        <h1>Gym Bro</h1>
         {sharingConfigured && (
           <button className="profile-btn" aria-label="Your profile" aria-current={route.name === 'profile' ? 'page' : undefined} onClick={() => setRoute({ name: 'profile' })}>
             {auth.profile ? <Avatar profile={auth.profile} size={40} /> : <span className="avatar" style={{ width: 40, height: 40, fontSize: 18 }} aria-hidden="true">＋</span>}
@@ -49,7 +51,7 @@ export default function App() {
         ) : route.name === 'edit' ? (
           <Editor key={(route.id ?? 'new') + (route.date ?? '')} data={data} auth={auth} id={route.id} date={route.date} go={setRoute} />
         ) : route.name === 'social' ? (
-          <Social data={data} auth={auth} onEditProfile={() => setRoute({ name: 'profile' })} />
+          <Social data={data} auth={auth} seen={activity.seen} onSeen={activity.markSeen} onEditProfile={() => setRoute({ name: 'profile' })} />
         ) : route.name === 'profile' ? (
           <Profile data={data} auth={auth} />
         ) : route.name === 'progress' ? (
@@ -61,8 +63,16 @@ export default function App() {
       <nav className="tabs" aria-label="Main">
         <div className="inner">
           {tabs.map((t) => (
-            <button key={t.key} aria-current={route.name === t.key ? 'page' : undefined} onClick={() => setRoute(t.to)}>
-              {t.label}
+            <button
+              key={t.key}
+              aria-current={route.name === t.key ? 'page' : undefined}
+              aria-label={t.key === 'social' && activity.unread ? 'Friends, new activity' : undefined}
+              onClick={() => setRoute(t.to)}
+            >
+              <span className="tab-label">
+                {t.label}
+                {t.key === 'social' && activity.unread && <i className="notify-dot" aria-hidden="true" />}
+              </span>
             </button>
           ))}
         </div>
