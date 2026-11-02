@@ -3,6 +3,7 @@ import type { AppData } from '../data'
 import { db } from '../db'
 import { buildBackup, buildCsv, download, importBackup } from '../exportData'
 import { toDateStr } from '../calc'
+import { showToast } from '../toast'
 import { deleteCustomExercise, MAX_EXERCISE_NAME, renameCustomExercise, usageCount } from '../exerciseOps'
 import type { Exercise } from '../types'
 
@@ -13,14 +14,15 @@ export default function Settings({ data }: { data: AppData }) {
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
 
   const run = async (f: () => Promise<unknown>, ok: string) => {
-    try { await f(); setMsg({ type: 'ok', text: ok }) } catch (e) { setMsg({ type: 'error', text: e instanceof Error ? e.message : 'Something went wrong.' }) }
+    try { await f(); (setMsg(null), showToast(ok)) } catch (e) { setMsg({ type: 'error', text: e instanceof Error ? e.message : 'Something went wrong.' }) }
   }
 
   const onImport = async (f: File | undefined) => {
     if (!f) return
     try {
       const n = await importBackup(await f.text())
-      setMsg({ type: 'ok', text: `Imported ${n} workouts.` })
+      setMsg(null)
+      showToast(`Imported ${n} ${n === 1 ? 'workout' : 'workouts'}`)
     } catch (e) {
       setMsg({ type: 'error', text: e instanceof Error ? e.message : 'Import failed.' })
     }
@@ -33,7 +35,8 @@ export default function Settings({ data }: { data: AppData }) {
       await db.workouts.clear()
       await db.customExercises.clear()
     })
-    setMsg({ type: 'ok', text: 'All local data deleted.' })
+    setMsg(null)
+    showToast('All local data deleted.')
   }
 
   return (
@@ -85,10 +88,10 @@ export default function Settings({ data }: { data: AppData }) {
         <h2 style={{ marginTop: 0 }}>Export</h2>
         <p className="sub">Your log lives in this browser. Save a backup now and then, especially before switching phones.</p>
         <div className="row">
-          <button className="btn" onClick={async () => download(`gym-bro-${today}.json`, JSON.stringify(await buildBackup(), null, 2), 'application/json')}>
+          <button className="btn" onClick={async () => { download(`gym-bro-${today}.json`, JSON.stringify(await buildBackup(), null, 2), 'application/json'); showToast('Backup downloaded') }}>
             Backup (JSON)
           </button>
-          <button className="btn secondary" onClick={() => download(`gym-bro-${today}.csv`, buildCsv(data.workouts, data.custom), 'text/csv;charset=utf-8')}>
+          <button className="btn secondary" onClick={() => { download(`gym-bro-${today}.csv`, buildCsv(data.workouts, data.custom), 'text/csv;charset=utf-8'); showToast('CSV downloaded') }}>
             Spreadsheet (CSV)
           </button>
         </div>

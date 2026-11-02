@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import Toaster from './components/Toaster'
+import Loading from './components/Loading'
 import { useAppData } from './data'
 import { syncPending, useAuth } from './social'
 import { useFriendActivity } from './activity'
@@ -18,6 +20,14 @@ export default function App() {
   const data = useAppData()
   const auth = useAuth()
   const [route, setRoute] = useState<Route>({ name: 'home' })
+  const [online, setOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [])
 
   const userId = auth.session?.user.id
   const activity = useFriendActivity(userId, sharingConfigured && !!auth.profile)
@@ -43,9 +53,10 @@ export default function App() {
           </button>
         )}
       </header>
+      {!online && <div className="offline" role="status">You are offline. Records are saved on this device and shared when you are back online.</div>}
       <main>
         {!data.ready ? (
-          <p>Loading…</p>
+          <Loading />
         ) : route.name === 'home' ? (
           <Home data={data} go={setRoute} signedIn={!!auth.profile} />
         ) : route.name === 'edit' ? (
@@ -60,6 +71,7 @@ export default function App() {
           <Settings data={data} />
         )}
       </main>
+      <Toaster />
       <nav className="tabs" aria-label="Main">
         <div className="inner">
           {tabs.map((t) => (

@@ -8,6 +8,8 @@ import SharedCard from '../components/SharedCard'
 import { ProgressView } from './Progress'
 import { toProgressData } from '../friendProgress'
 import { toDateStr } from '../calc'
+import Loading from '../components/Loading'
+import { showToast } from '../toast'
 import {
   addFriend, createProfile, fetchFeed, fetchFriendLog, fetchFriends, fetchProfile, fetchMyCode, regenerateCode, removeFriend,
   signIn, signOut, signUp, type FeedItem, type Profile,
@@ -25,7 +27,7 @@ export default function Social({ data, auth, seen, onSeen, onEditProfile }: { da
         <p>This build has no server settings, so the app works as a private log. See docs/SETUP.md to turn on friend sharing.</p>
       </section>
     )
-  if (auth.loading) return <p>Loading…</p>
+  if (auth.loading) return <Loading />
   if (!auth.session) return <AuthForm />
   if (!auth.profile) return <ProfileForm onDone={auth.refresh} />
   return <SignedIn data={data} auth={auth} me={auth.profile} seen={seen} onSeen={onSeen} onEditProfile={onEditProfile} />
@@ -154,7 +156,7 @@ function Feed({ me, onOpen, seen, onSeen }: { me: Profile; data: AppData; onOpen
         <RefreshButton onRefresh={load} />
       </div>
       {error && <div role="alert" className="msg">{error}</div>}
-      {items === null && !error && <p>Loading…</p>}
+      {items === null && !error && <Loading />}
       {items?.length === 0 && <p className="sub">Nothing here yet. Add friends in the next tab; every workout you save is shared with them automatically.</p>}
       {items?.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} onOpenAuthor={onOpen} isNew={isNew(it)} />)}
       {items && items.length >= limit && (
@@ -206,7 +208,7 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
       <h2 className="who" style={{ marginTop: 12 }}><Avatar profile={full} size={48} /><span>{name} <span className="sub">@{friend.username}</span></span></h2>
       {full.bio && <p style={{ margin: '0 0 4px', whiteSpace: 'pre-wrap' }}>{full.bio}</p>}
       {error && <div role="alert" className="msg">{error}</div>}
-      {items === null && !error && <p>Loading…</p>}
+      {items === null && !error && <Loading />}
       {items && (
         <>
           <p className="sub">{items.length} shared {items.length === 1 ? 'workout' : 'workouts'} in total.</p>
@@ -247,7 +249,7 @@ function Friends({ me, auth, onOpen, onEditProfile }: { me: Profile; auth: Auth;
   useEffect(() => { void load() }, [load])
 
   const run = async (f: () => Promise<unknown>, ok: string) => {
-    try { await f(); setMsg({ ok: true, text: ok }); await load() } catch (e) { setMsg({ ok: false, text: errText(e) }) }
+    try { await f(); (setMsg(null), showToast(ok)); await load() } catch (e) { setMsg({ ok: false, text: errText(e) }) }
   }
 
   return (
@@ -259,7 +261,7 @@ function Friends({ me, auth, onOpen, onEditProfile }: { me: Profile; auth: Auth;
         <p className="sub">Send this to a friend. Anyone who enters it becomes your friend and can see every workout you save. Regenerate it if it leaks.</p>
         <p><code aria-label="Your invite code" style={{ fontSize: '1.25rem' }}>{code}</code></p>
         <div className="row">
-          <button className="btn secondary small" onClick={() => navigator.clipboard?.writeText(code).then(() => setMsg({ ok: true, text: 'Copied.' }), () => setMsg({ ok: false, text: 'Could not copy.' }))}>Copy</button>
+          <button className="btn secondary small" onClick={() => navigator.clipboard?.writeText(code).then(() => (setMsg(null), showToast('Copied.')), () => setMsg({ ok: false, text: 'Could not copy.' }))}>Copy</button>
           <button className="btn secondary small" onClick={() => run(async () => setCode(await regenerateCode()), 'New code created. The old one no longer works.')}>Regenerate</button>
         </div>
       </section>

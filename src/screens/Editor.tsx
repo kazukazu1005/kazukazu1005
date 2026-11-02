@@ -9,6 +9,7 @@ import { retargetEntry } from '../entryOps'
 import { describeSet, fmtKg, setRM } from '../format'
 import { buildPayload, pushWorkout, removeShared } from '../social'
 import { sharingConfigured } from '../supabase'
+import { showToast } from '../toast'
 import { KIND_LABEL, type Entry, type Exercise, type ExerciseKind, type SetRec, type Workout } from '../types'
 
 const num = (v: string): number | undefined => (v === '' || isNaN(Number(v)) || Number(v) < 0 ? undefined : Number(v))
@@ -83,7 +84,14 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
 
   const canShare = sharingConfigured && !!auth.session && !!auth.profile
 
+  const [saving, setSaving] = useState(false)
   const save = async () => {
+    if (saving) return
+    setSaving(true)
+    try { await doSave() } finally { setSaving(false) }
+  }
+
+  const doSave = async () => {
     setError('')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(w.date)) return setError('Please enter a date.')
     if (w.entries.length === 0) return setError('Add at least one exercise.')
@@ -110,6 +118,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
     await db.workouts.put(next)
     finished.current = true
     clearDraft(draftKey)
+    showToast(next.synced ? 'Saved and shared with friends' : 'Saved on this device')
     go({ name: 'home' })
   }
 
@@ -127,6 +136,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
     await db.workouts.delete(w.id)
     finished.current = true
     clearDraft(draftKey)
+    showToast('Workout deleted')
     go({ name: 'home' })
   }
 
@@ -169,33 +179,35 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
             {prs.length > 0 && <p style={{ margin: '4px 0' }}>{prs.map((p) => <span key={p} className="badge" style={{ marginRight: 4 }}>New PR: {p}</span>)}</p>}
             {prev && <p className="sub">Last time ({prev.date}): {prev.sets.map((s) => describeSet(s, ex.kind)).join(' / ')}</p>}
 
-            {e.sets.map((s, i) => (
-              <div key={s.id}>
-                <div className="set-row">
-                  <span className="num">{i + 1}</span>
-                  {ex.kind === 'weight' && (
-                    <>
-                      <div><label className="sub" htmlFor={`w${s.id}`}>Weight (kg)</label><input id={`w${s.id}`} type="number" inputMode="decimal" min="0" step="0.5" value={s.weight ?? ''} onChange={(ev) => patchSet(e.id, s.id, { weight: num(ev.target.value) })} /></div>
-                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
-                    </>
-                  )}
-                  {ex.kind === 'bodyweight' && (
-                    <>
-                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
-                      <div />
-                    </>
-                  )}
-                  <button className="btn danger small" aria-label={`Delete set ${i + 1}`} onClick={() => patchEntry(e.id, (x) => ({ ...x, sets: x.sets.filter((y) => y.id !== s.id) }))}>Delete</button>
-                </div>
-                {ex.kind === 'weight' && setRM(s) !== null && (
-                  <div className="rm" aria-live="polite">Est. 1RM <b>{fmtKg(setRM(s)!)} kg</b></div>
-                )}
+            <div role="group" aria-label={`${ex.name} sets`}>
+              <div className={`set-grid set-head ${ex.kind}`} aria-hidden="true">
+                <span>Set</span>
+                {ex.kind === 'weight' && <span>kg</span>}
+                <span>Reps</span>
+                {ex.kind === 'weight' && <span className="r" title="Estimated 1RM: weight × (1 + reps ÷ 30)">1RM</span>}
+                <span />
               </div>
-            ))}
+              {e.sets.map((s, i) => {
+                const rm = ex.kind === 'weight' ? setRM(s) : null
+                return (
+                  <div key={s.id} className={`set-grid ${ex.kind}`}>
+                    <span className="num">{i + 1}</span>
+                    {ex.kind === 'weight' && (
+                      <input type="number" inputMode="decimal" min="0" step="0.5" aria-label={`Set ${i + 1} weight (kg)`} value={s.weight ?? ''} onChange={(ev) => patchSet(e.id, s.id, { weight: num(ev.target.value) })} />
+                    )}
+                    <input type="number" inputMode="numeric" min="0" step="1" aria-label={`Set ${i + 1} reps`} value={s.reps ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} />
+                    {ex.kind === 'weight' && <span className="rm-cell" aria-label={rm === null ? undefined : `Estimated 1RM ${fmtKg(rm)} kg`}>{rm === null ? '–' : fmtKg(rm)}</span>}
+                    <button className="icon-x" aria-label={`Delete set ${i + 1}`} onClick={() => patchEntry(e.id, (x) => ({ ...x, sets: x.sets.filter((y) => y.id !== s.id) }))}>
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
             {ex.kind === 'weight' && e.sets.some((x) => setRM(x) !== null) && (
-              <p className="rm-best">Best est. 1RM today: <b>{fmtKg(Math.max(...e.sets.map((x) => setRM(x) ?? 0)))} kg</b> <span className="sub">(weight × (1 + reps ÷ 30))</span></p>
+              <p className="rm-best">Best est. 1RM today: <b>{fmtKg(Math.max(...e.sets.map((x) => setRM(x) ?? 0)))} kg</b></p>
             )}
-            <button className="btn secondary block" style={{ marginTop: 20 }} onClick={() => addSet(e)}>Add set</button>
+            <button className="btn secondary block" style={{ marginTop: 16 }} onClick={() => addSet(e)}>Add set</button>
           </section>
         )
       })}
@@ -213,7 +225,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
         </p>
       )}
       <div className="row" style={{ marginTop: 16 }}>
-        <button className="btn grow" onClick={save}>Save</button>
+        <button className="btn grow" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
         {existing && <button className="btn danger" onClick={remove}>Delete</button>}
       </div>
 
