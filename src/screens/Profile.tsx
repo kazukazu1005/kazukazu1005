@@ -4,6 +4,8 @@ import type { AppData } from '../data'
 import Avatar from '../components/Avatar'
 import { fileToAvatar } from '../avatar'
 import { weekStreak } from '../calc'
+import Loading from '../components/Loading'
+import { showToast } from '../toast'
 import { signOut, updateAvatar, updateProfile } from '../social'
 import { sharingConfigured } from '../supabase'
 import { AuthForm, ProfileForm } from './Social'
@@ -18,7 +20,7 @@ export default function Profile({ data, auth }: { data: AppData; auth: Auth }) {
         <p>Profiles are used for sharing with friends. This build has no server settings, so there is nothing to set up yet. See docs/SETUP.md.</p>
       </section>
     )
-  if (auth.loading) return <p>Loading…</p>
+  if (auth.loading) return <Loading />
   if (!auth.session) return <><h2 style={{ marginTop: 0 }}>Create your profile</h2><AuthForm /></>
   if (!auth.profile) return <><h2 style={{ marginTop: 0 }}>Create your profile</h2><ProfileForm onDone={auth.refresh} /></>
   return <Editor data={data} auth={auth} />
@@ -34,7 +36,7 @@ function Editor({ data, auth }: { data: AppData; auth: Auth }) {
 
   const run = async (f: () => Promise<unknown>, ok: string) => {
     setBusy(true)
-    try { await f(); await auth.refresh(); setMsg({ ok: true, text: ok }) } catch (e) { setMsg({ ok: false, text: errText(e) }) }
+    try { await f(); await auth.refresh(); (setMsg(null), showToast(ok)) } catch (e) { setMsg({ ok: false, text: errText(e) }) }
     setBusy(false)
   }
   const save = (e: FormEvent) => {

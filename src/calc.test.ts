@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectPRs, estimate1RM, isFilledSet, monthGrid, statsFor, weekStreak } from './calc'
+import { detectPRs, estimate1RM, isFilledSet, monthGrid, new1RMRecord, statsFor, weekStreak } from './calc'
 import type { Exercise, Workout } from './types'
 
 const bench: Exercise = { id: 'bench', name: 'Bench', kind: 'weight', part: 'Chest' }
@@ -50,5 +50,17 @@ describe('calc', () => {
     expect(g[6]).toBe('2026-11-01')
     expect(g.filter(Boolean).length).toBe(30)
     expect(monthGrid(2026, 1)[6]).toBe('2026-02-01') // Feb 1 2026 is Sunday, so 6 blanks first
+  })
+  it('new1RMRecord: needs an earlier record, a real improvement, and ignores unchanged re-saves', () => {
+    const saved = [wk('1', '2026-01-01', 'bench', [{ id: 'a', weight: 60, reps: 10 }])] // est 80
+    const better = { id: 'e', exerciseId: 'bench', sets: [{ id: 'b', weight: 70, reps: 8 }] } // est 88.7
+    const same = { id: 'e', exerciseId: 'bench', sets: [{ id: 'b', weight: 60, reps: 10 }] }
+    const r = new1RMRecord(better, bench, saved)
+    expect(r?.prev).toBeCloseTo(80)
+    expect(r?.next).toBeCloseTo(88.67, 1)
+    expect(new1RMRecord(same, bench, saved)).toBeNull() // re-saving the same best
+    expect(new1RMRecord(better, bench, [])).toBeNull() // first record ever
+    // editing the very workout that holds the best: lowering is no record, and the old value still counts
+    expect(new1RMRecord(same, bench, [wk('2', '2026-01-02', 'bench', better.sets)])).toBeNull()
   })
 })

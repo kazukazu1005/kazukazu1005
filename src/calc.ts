@@ -78,6 +78,18 @@ export function detectPRs(entry: Entry, exercise: Exercise, date: string, workou
   return prs
 }
 
+/**
+ * A new personal best for estimated 1RM, or null. `workouts` are the saved ones (before this save),
+ * so the earlier saved version of the workout being edited counts too, and re-saving an unchanged
+ * record never counts again. The very first record of an exercise is not a record to beat.
+ */
+export function new1RMRecord(entry: Entry, exercise: Exercise, workouts: Workout[]): { prev: number; next: number } | null {
+  if (exercise.kind !== 'weight') return null
+  const next = Math.max(0, ...entry.sets.map((s) => estimate1RM(s.weight ?? 0, s.reps ?? 0)))
+  const prev = Math.max(0, ...statsFor(exercise.id, workouts).map((s) => s.best1RM))
+  return prev > 0 && next > prev + 0.05 ? { prev, next } : null
+}
+
 export function toDateStr(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')

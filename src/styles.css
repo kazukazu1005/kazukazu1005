@@ -62,9 +62,6 @@ input[type='text'], input[type='email'], input[type='password'], input[type='dat
 textarea { min-height: 88px; }
 .field-group { margin-bottom: 12px; }
 
-.set-row { display: grid; grid-template-columns: 1.5rem 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 4px; }
-.set-row .num { font-weight: 600; padding-bottom: 10px; text-align: center; color: var(--ink-sub); }
-.set-row.warm { background: var(--hover); border-radius: var(--radius); padding: 4px; }
 .check { display: inline-flex; gap: 8px; align-items: center; min-height: var(--tap); cursor: pointer; }
 .check input { width: 20px; height: 20px; accent-color: var(--accent); }
 
@@ -171,8 +168,6 @@ input[type='file'].visually-hidden { position: absolute; width: 1px; height: 1px
 .file-btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* 1RM readouts */
-.rm { margin: 0 0 8px calc(1.5rem + 8px); font-size: 0.875rem; color: var(--ink-sub); }
-.rm b { color: var(--accent-ink); font-variant-numeric: tabular-nums; }
 .rm-best { margin: 4px 0 12px; }
 .rm-best b { color: var(--accent-ink); }
 
@@ -211,3 +206,40 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 /* "new activity" dot on the Friends tab */
 .tab-label { position: relative; display: inline-block; }
 .notify-dot { position: absolute; top: -2px; right: -10px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
+
+/* compact set table: one header per exercise, one line per set */
+.set-grid { display: grid; gap: 8px; align-items: center; margin-bottom: 6px; }
+.set-grid.weight { grid-template-columns: 1.75rem minmax(0, 1fr) minmax(0, 1fr) 3.75rem 44px; }
+.set-grid.bodyweight { grid-template-columns: 1.75rem minmax(0, 1fr) 44px; }
+.set-head { font-size: 0.8125rem; color: var(--ink-sub); margin-bottom: 2px; }
+.set-head .r, .rm-cell { text-align: right; }
+.set-grid .num { text-align: center; font-weight: 600; color: var(--ink-sub); }
+.rm-cell { font-size: 0.9375rem; color: var(--accent-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.icon-x { width: 44px; height: 44px; border: 0; border-radius: var(--radius); background: none; color: var(--ink-sub); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.icon-x:hover { background: var(--hover); color: var(--ink); }
+
+/* toast, loading, offline */
+.toast-region { position: fixed; left: 0; right: 0; bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 15; display: flex; justify-content: center; pointer-events: none; padding: 0 16px; }
+.toast { pointer-events: auto; max-width: 420px; padding: 10px 16px; border-radius: var(--radius); background: var(--ink); color: #fff; font-size: 0.9375rem; box-shadow: 0 4px 16px rgba(55, 53, 47, .3); animation: toast-in .18s ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.loading { display: flex; align-items: center; gap: 10px; color: var(--ink-sub); margin: 16px 0; }
+.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+.offline { margin: 8px 16px 0; padding: 8px 12px; border-radius: var(--radius); background: var(--hover); color: var(--ink); font-size: 0.875rem; border-left: 4px solid var(--ink-sub); }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } .spinner { animation-duration: 2.4s; } }
+
+/* new 1RM record screen */
+.celebrate { position: fixed; inset: 0; z-index: 30; background: var(--bg); overflow-y: auto; display: flex; justify-content: center; }
+.celebrate-body { position: relative; z-index: 1; width: 100%; max-width: 420px; padding: max(32px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); text-align: center; align-self: center; }
+.trophy { display: block; margin: 0 auto 4px; animation: pop .55s cubic-bezier(.2, 1.4, .4, 1) both; max-width: 60vw; height: auto; }
+.eyebrow { margin: 8px 0 0; font-size: 0.875rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); }
+.celebrate-title { margin: 0 0 16px; font-size: 2rem; line-height: 1.2; }
+.record { padding: 14px 12px 16px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.record-name { font-weight: 600; }
+.record-num { font-size: 3.5rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.record-num span { font-size: 1.25rem; font-weight: 600; color: var(--ink-sub); }
+.record-diff { margin-bottom: 10px; font-weight: 700; color: var(--accent-ink); }
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti i { position: absolute; top: -24px; display: block; opacity: 0; animation: confetti-fall linear infinite; }
+@keyframes confetti-fall { 0% { opacity: 0; transform: translateY(0) rotate(0deg); } 10% { opacity: 1; } 100% { opacity: 1; transform: translateY(105vh) rotate(540deg); } }
+@keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .confetti { display: none; } .trophy { animation: none; } }
