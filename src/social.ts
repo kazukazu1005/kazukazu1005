@@ -13,6 +13,7 @@ export interface SharedPayload { entries: SharedEntry[] }
 export interface FeedComment { id: string; user_id: string; body: string; created_at: string; profiles: { username: string; avatar?: string | null } | null }
 export interface FeedItem {
   id: string
+  created_at: string
   user_id: string
   date: string
   title: string
@@ -157,7 +158,7 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
 
 // ---------- feed ----------
 const FEED_SELECT =
-  'id, user_id, date, title, note, data, profiles(username, display_name, avatar), reactions(user_id, emoji, profiles(username)), comments(id, user_id, body, created_at, profiles(username, avatar))'
+  'id, user_id, created_at, date, title, note, data, profiles(username, display_name, avatar), reactions(user_id, emoji, profiles(username)), comments(id, user_id, body, created_at, profiles(username, avatar))'
 
 export async function fetchFeed(): Promise<FeedItem[]> {
   const { data, error } = await sb()
@@ -202,4 +203,11 @@ export async function addComment(workoutId: string, userId: string, body: string
 }
 export async function deleteComment(id: string) {
   fail((await sb().from('comments').delete().eq('id', id)).error)
+}
+
+/** When a friend last added a workout (newest first), or null if none. Used for the "new" dot. */
+export async function fetchLatestFriendPostTime(myId: string): Promise<string | null> {
+  const { data, error } = await sb().from('shared_workouts').select('created_at').neq('user_id', myId).order('created_at', { ascending: false }).limit(1)
+  fail(error)
+  return (data?.[0] as { created_at: string } | undefined)?.created_at ?? null
 }

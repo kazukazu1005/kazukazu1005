@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AppData } from '../data'
+import type { Exercise, Workout } from '../types'
 import { PARTS } from '../exercises'
 import { statsFor, type ExerciseStat } from '../calc'
 
@@ -116,18 +117,24 @@ function Chart({ points, metric }: { points: Point[]; metric: Metric }) {
   )
 }
 
+/** Own progress. */
 export default function Progress({ data }: { data: AppData }) {
-  const used = new Set(data.workouts.flatMap((w) => w.entries.map((e) => e.exerciseId)))
-  const list = data.allExercises.filter((e) => used.has(e.id))
+  return <ProgressView exercises={data.allExercises} workouts={data.workouts} />
+}
+
+/** Progress charts for any set of exercises and workouts (yours, or a friend's shared ones). */
+export function ProgressView({ exercises, workouts }: { exercises: Exercise[]; workouts: Workout[] }) {
+  const used = new Set(workouts.flatMap((w) => w.entries.map((e) => e.exerciseId)))
+  const list = exercises.filter((e) => used.has(e.id))
   const [exId, setExId] = useState<string>('')
   const [mKey, setMKey] = useState<string>('')
 
-  if (list.length === 0) return <p className="sub">Charts for each exercise will appear here once you have some records.</p>
+  if (list.length === 0) return <p className="sub">Charts for each exercise will appear here once there are some records.</p>
 
-  const ex = data.exercises.get(exId) ?? list[0]
+  const ex = list.find((e) => e.id === exId) ?? list[0]
   const metrics = METRICS[ex.kind]
   const metric = metrics.find((m) => m.key === mKey) ?? metrics[0]
-  const stats = statsFor(ex.id, data.workouts)
+  const stats = statsFor(ex.id, workouts)
   const points: Point[] = stats.flatMap((s) => {
     const v = metric.get(s)
     return v && v > 0 ? [{ date: s.date, v }] : []

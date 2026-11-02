@@ -207,3 +207,7 @@ header.top { align-items: center; }
 /* no up/down spinner arrows inside number boxes (the phone keypad is used instead) */
 input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* "new activity" dot on the Friends tab */
+.tab-label { position: relative; display: inline-block; }
+.notify-dot { position: absolute; top: -2px; right: -10px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }

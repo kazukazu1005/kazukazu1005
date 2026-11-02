@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { Auth } from '../App'
 import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
 import Avatar from '../components/Avatar'
 import RefreshButton from '../components/RefreshButton'
 import SharedCard from '../components/SharedCard'
+import { ProgressView } from './Progress'
+import { toProgressData } from '../friendProgress'
 import { toDateStr } from '../calc'
 import {
   addFriend, createProfile, fetchFeed, fetchFriendLog, fetchFriends, fetchProfile, fetchMyCode, regenerateCode, removeFriend,
@@ -14,7 +16,7 @@ import { sharingConfigured } from '../supabase'
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.')
 
-export default function Social({ data, auth, onEditProfile }: { data: AppData; auth: Auth; onEditProfile: () => void }) {
+export default function Social({ data, auth, seen, onSeen, onEditProfile }: { data: AppData; auth: Auth; seen: string | null; onSeen: (iso: string) => void; onEditProfile: () => void }) {
   if (!sharingConfigured)
     return (
       <section className="card">
@@ -25,7 +27,7 @@ export default function Social({ data, auth, onEditProfile }: { data: AppData; a
   if (auth.loading) return <p>Loading…</p>
   if (!auth.session) return <AuthForm />
   if (!auth.profile) return <ProfileForm onDone={auth.refresh} />
-  return <SignedIn data={data} auth={auth} me={auth.profile} onEditProfile={onEditProfile} />
+  return <SignedIn data={data} auth={auth} me={auth.profile} seen={seen} onSeen={onSeen} onEditProfile={onEditProfile} />
 }
 
 export function AuthForm() {
@@ -103,7 +105,7 @@ export function ProfileForm({ onDone }: { onDone: () => Promise<void> }) {
   )
 }
 
-function SignedIn({ data, auth, me, onEditProfile }: { data: AppData; auth: Auth; me: Profile; onEditProfile: () => void }) {
+function SignedIn({ data, auth, me, seen, onSeen, onEditProfile }: { data: AppData; auth: Auth; me: Profile; seen: string | null; onSeen: (iso: string) => void; onEditProfile: () => void }) {
   const [tab, setTab] = useState<'feed' | 'friends'>('feed')
   const [viewing, setViewing] = useState<Profile | null>(null)
   if (viewing) return <FriendLog me={me} friend={viewing} onBack={() => setViewing(null)} />
@@ -113,27 +115,35 @@ function SignedIn({ data, auth, me, onEditProfile }: { data: AppData; auth: Auth
         <button className="chip" aria-pressed={tab === 'feed'} onClick={() => setTab('feed')}>Feed</button>
         <button className="chip" aria-pressed={tab === 'friends'} onClick={() => setTab('friends')}>Friends & account</button>
       </div>
-      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} /> : <Friends me={me} auth={auth} onOpen={setViewing} onEditProfile={onEditProfile} />}
+      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} seen={seen} onSeen={onSeen} /> : <Friends me={me} auth={auth} onOpen={setViewing} onEditProfile={onEditProfile} />}
     </>
   )
 }
 
-function Feed({ me, onOpen }: { me: Profile; data: AppData; onOpen: (p: Profile) => void }) {
+function Feed({ me, onOpen, seen, onSeen }: { me: Profile; data: AppData; onOpen: (p: Profile) => void; seen: string | null; onSeen: (iso: string) => void }) {
   const [items, setItems] = useState<FeedItem[] | null>(null)
   const [error, setError] = useState('')
+  // Posts newer than what you had seen when you opened the feed get a "New" mark.
+  const baseline = useRef<number | null>(null)
   const load = useCallback(async () => {
     try {
-      setItems(await fetchFeed())
+      const list = await fetchFeed()
+      if (baseline.current === null) baseline.current = seen === null ? Number.POSITIVE_INFINITY : Date.parse(seen)
+      setItems(list)
       setError('')
+      const newest = list.filter((i) => i.user_id !== me.id).map((i) => i.created_at).sort((a, b) => Date.parse(b) - Date.parse(a))[0]
+      if (newest) onSeen(newest)
     } catch (e) {
       setError(errText(e))
     }
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me.id])
   useEffect(() => { void load() }, [load])
 
   const act = async (f: () => Promise<void>) => {
     try { await f(); await load() } catch (e) { setError(errText(e)) }
   }
+  const isNew = (i: FeedItem) => i.user_id !== me.id && baseline.current !== null && Date.parse(i.created_at) > baseline.current
 
   return (
     <>
@@ -144,7 +154,7 @@ function Feed({ me, onOpen }: { me: Profile; data: AppData; onOpen: (p: Profile)
       {error && <div role="alert" className="msg">{error}</div>}
       {items === null && !error && <p>Loading…</p>}
       {items?.length === 0 && <p className="sub">Nothing here yet. Add friends in the next tab; every workout you save is shared with them automatically.</p>}
-      {items?.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} onOpenAuthor={onOpen} />)}
+      {items?.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} onOpenAuthor={onOpen} isNew={isNew(it)} />)}
     </>
   )
 }
@@ -154,6 +164,7 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(toDateStr(new Date()))
   const [full, setFull] = useState<Profile>(friend)
+  const [view, setView] = useState<'calendar' | 'progress'>('calendar')
   const load = useCallback(async () => {
     try {
       const [list, prof] = await Promise.all([fetchFriendLog(friend.id), fetchProfile(friend.id)])
@@ -176,6 +187,7 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
   }, [items])
   const marks = (date: string) => ({ count: byDate.get(date)?.length ?? 0 })
   const day = byDate.get(selected) ?? []
+  const progress = useMemo(() => toProgressData(items ?? []), [items])
   const selLabel = new Date(selected + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
   const name = friend.display_name || friend.username
 
@@ -191,11 +203,21 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
       {items === null && !error && <p>Loading…</p>}
       {items && (
         <>
-          <p className="sub">{items.length} shared {items.length === 1 ? 'workout' : 'workouts'} in total. Only workouts {name} chose to share appear here.</p>
-          <Calendar marks={marks} selected={selected} onSelect={setSelected} />
-          <h2>{selLabel}</h2>
-          {day.length === 0 && <p className="sub">Nothing shared on this day.</p>}
-          {day.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} detail />)}
+          <p className="sub">{items.length} shared {items.length === 1 ? 'workout' : 'workouts'} in total.</p>
+          <div className="chips" role="group" aria-label="View">
+            <button className="chip" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>Calendar</button>
+            <button className="chip" aria-pressed={view === 'progress'} onClick={() => setView('progress')}>Progress</button>
+          </div>
+          {view === 'calendar' ? (
+            <>
+              <Calendar marks={marks} selected={selected} onSelect={setSelected} />
+              <h2>{selLabel}</h2>
+              {day.length === 0 && <p className="sub">Nothing shared on this day.</p>}
+              {day.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} detail />)}
+            </>
+          ) : (
+            <ProgressView exercises={progress.exercises} workouts={progress.workouts} />
+          )}
         </>
       )}
     </>
