@@ -10,8 +10,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Kintore Memo',
-        short_name: 'Kintore Memo',
+        name: 'Gym Bro',
+        short_name: 'Gym Bro',
         description: 'Workout and cardio log',
         lang: 'en',
         start_url: './',

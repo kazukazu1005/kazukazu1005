@@ -18,7 +18,7 @@ export async function buildBackup() {
 export function validateBackup(data: unknown): { workouts: Workout[]; customExercises: Exercise[] } {
   const d = data as { format?: string; workouts?: unknown; customExercises?: unknown }
   if (!d || d.format !== FORMAT || !Array.isArray(d.workouts) || !Array.isArray(d.customExercises)) {
-    throw new Error('This is not a Kintore Memo backup file.')
+    throw new Error('This is not a Gym Bro backup file.')
   }
   for (const w of d.workouts as Workout[]) {
     if (typeof w.id !== 'string' || typeof w.date !== 'string' || !Array.isArray(w.entries)) {

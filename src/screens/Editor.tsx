@@ -141,7 +141,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
             {ex.kind === 'weight' && e.sets.some((x) => setRM(x) !== null) && (
               <p className="rm-best">Best est. 1RM today: <b>{fmtKg(Math.max(...e.sets.map((x) => setRM(x) ?? 0)))} kg</b> <span className="sub">(weight × (1 + reps ÷ 30))</span></p>
             )}
-            <button className="btn secondary block" onClick={() => addSet(e)}>Add set</button>
+            <button className="btn secondary block" style={{ marginTop: 20 }} onClick={() => addSet(e)}>Add set</button>
           </section>
         )
       })}

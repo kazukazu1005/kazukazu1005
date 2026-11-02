@@ -34,7 +34,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="top row spread">
-        <h1>Kintore Memo</h1>
+        <h1>Gym Bro</h1>
         {sharingConfigured && (
           <button className="profile-btn" aria-label="Your profile" aria-current={route.name === 'profile' ? 'page' : undefined} onClick={() => setRoute({ name: 'profile' })}>
             {auth.profile ? <Avatar profile={auth.profile} size={40} /> : <span className="avatar" style={{ width: 40, height: 40, fontSize: 18 }} aria-hidden="true">＋</span>}

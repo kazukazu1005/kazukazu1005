@@ -1,4 +1,4 @@
--- Kintore Memo: Phase 2 schema for Supabase (Postgres).
+-- Gym Bro: Phase 2 schema for Supabase (Postgres).
 -- Run the whole file once in Supabase Dashboard > SQL Editor.
 -- Safe to re-run: uses IF NOT EXISTS / CREATE OR REPLACE / DROP POLICY IF EXISTS.
 

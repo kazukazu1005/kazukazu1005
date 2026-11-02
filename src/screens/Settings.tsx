@@ -36,10 +36,10 @@ export default function Settings({ data }: { data: AppData }) {
         <h2 style={{ marginTop: 0 }}>Export</h2>
         <p className="sub">Your log lives in this browser. Save a backup now and then, especially before switching phones.</p>
         <div className="row">
-          <button className="btn" onClick={async () => download(`kintore-memo-${today}.json`, JSON.stringify(await buildBackup(), null, 2), 'application/json')}>
+          <button className="btn" onClick={async () => download(`gym-bro-${today}.json`, JSON.stringify(await buildBackup(), null, 2), 'application/json')}>
             Backup (JSON)
           </button>
-          <button className="btn secondary" onClick={() => download(`kintore-memo-${today}.csv`, buildCsv(data.workouts, data.custom), 'text/csv;charset=utf-8')}>
+          <button className="btn secondary" onClick={() => download(`gym-bro-${today}.csv`, buildCsv(data.workouts, data.custom), 'text/csv;charset=utf-8')}>
             Spreadsheet (CSV)
           </button>
         </div>

@@ -1,4 +1,4 @@
-# 筋トレメモ
+# Gym Bro
 
 筋トレ・有酸素を記録するPWA。将来は友達との記録共有（筋トレ版Strava）を追加予定。機能一覧は [docs/features.md](docs/features.md)。
 
@@ -21,5 +21,6 @@ npm run build    # 本番ビルド(dist/)
 `dist/` は Cloudflare Pages / GitHub Pages / Vercel などの無料静的ホスティングにそのまま置けます。
 
 ## 注意
+- 内部のデータ保存名とバックアップ形式の識別子は旧名 `kintore-memo` のままです(変えると既存の記録や古いバックアップが読めなくなるため)。
 - 記録は端末ごとに保存されます。機種変更前に設定画面からバックアップしてください。
 - UIは英語・Notion風（文字色＋青のアクセント1色）。色は `src/styles.css` の変数で変更できます。
