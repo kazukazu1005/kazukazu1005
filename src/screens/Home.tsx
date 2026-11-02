@@ -1,14 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { Route } from '../App'
 import type { AppData } from '../data'
+import Calendar from '../components/Calendar'
 import { describeSet } from '../format'
-import { monthGrid, toDateStr, weekStart, weekStreak, workoutVolume } from '../calc'
-
-const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+import { toDateStr, weekStart, weekStreak, workoutVolume } from '../calc'
 
 export default function Home({ data, go }: { data: AppData; go: (r: Route) => void }) {
   const todayStr = toDateStr(new Date())
-  const [ym, setYm] = useState(() => ({ y: new Date().getFullYear(), m: new Date().getMonth() }))
   const [selected, setSelected] = useState(todayStr)
 
   const byDate = useMemo(() => {
@@ -17,31 +15,17 @@ export default function Home({ data, go }: { data: AppData; go: (r: Route) => vo
     return m
   }, [data.workouts])
 
-  const kindsOn = (date: string) => {
+  const marks = (date: string) => {
     let strength = false
     let cardio = false
-    for (const w of byDate.get(date) ?? [])
+    const ws = byDate.get(date) ?? []
+    for (const w of ws)
       for (const e of w.entries) {
         if (data.exercises.get(e.exerciseId)?.kind === 'cardio') cardio = true
         else strength = true
       }
-    return { strength, cardio }
+    return { strength, cardio, count: ws.length }
   }
-
-  const move = (delta: number) => {
-    const d = new Date(ym.y, ym.m + delta, 1)
-    setYm({ y: d.getFullYear(), m: d.getMonth() })
-  }
-  const goToday = () => {
-    const n = new Date()
-    setYm({ y: n.getFullYear(), m: n.getMonth() })
-    setSelected(todayStr)
-  }
-
-  const cells = monthGrid(ym.y, ym.m)
-  const monthPrefix = `${ym.y}-${String(ym.m + 1).padStart(2, '0')}`
-  const monthCount = new Set(data.workouts.filter((w) => w.date.startsWith(monthPrefix)).map((w) => w.date)).size
-  const label = new Date(ym.y, ym.m, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   const ws = toDateStr(weekStart(new Date()))
   const thisWeek = data.workouts.filter((w) => w.date >= ws)
@@ -56,45 +40,7 @@ export default function Home({ data, go }: { data: AppData; go: (r: Route) => vo
 
   return (
     <>
-      <section aria-label="Calendar" className="cal">
-        <div className="row spread" style={{ marginBottom: 4 }}>
-          <button className="btn secondary small" onClick={() => move(-1)} aria-label="Previous month">‹</button>
-          <div style={{ textAlign: 'center' }}>
-            <h2 style={{ margin: 0 }} aria-live="polite">{label}</h2>
-            <span className="sub">{monthCount} {monthCount === 1 ? 'day' : 'days'} trained</span>
-          </div>
-          <button className="btn secondary small" onClick={() => move(1)} aria-label="Next month">›</button>
-        </div>
-        <div className="cal-grid" role="grid" aria-label={label}>
-          {DOW.map((d) => <div key={d} className="cal-dow" role="columnheader">{d}</div>)}
-          {cells.map((c, i) => {
-            if (!c) return <div key={i} />
-            const k = kindsOn(c)
-            const n = byDate.get(c)?.length ?? 0
-            return (
-              <button
-                key={c}
-                className="cal-day"
-                aria-pressed={c === selected}
-                aria-current={c === todayStr ? 'date' : undefined}
-                aria-label={`${c}, ${n} ${n === 1 ? 'workout' : 'workouts'}`}
-                onClick={() => setSelected(c)}
-              >
-                <span className="cal-num">{Number(c.slice(8))}</span>
-                <span className="cal-dots" aria-hidden="true">
-                  {k.strength && <i className="dot strength" />}
-                  {k.cardio && <i className="dot cardio" />}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-        <div className="row sub" style={{ marginTop: 4, gap: 16 }}>
-          <span><i className="dot strength" /> Strength</span>
-          <span><i className="dot cardio" /> Cardio</span>
-          <button className="btn secondary small" style={{ marginLeft: 'auto' }} onClick={goToday}>Today</button>
-        </div>
-      </section>
+      <Calendar marks={marks} selected={selected} onSelect={setSelected} />
 
       <h2>{selLabel}</h2>
       {dayWorkouts.length === 0 && <p className="sub">No workouts on this day.</p>}

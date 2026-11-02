@@ -144,14 +144,31 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
 }
 
 // ---------- feed ----------
+const FEED_SELECT =
+  'id, user_id, date, title, note, data, profiles(username, display_name), reactions(user_id), comments(id, user_id, body, created_at, profiles(username))'
+
 export async function fetchFeed(): Promise<FeedItem[]> {
   const { data, error } = await sb()
     .from('shared_workouts')
-    .select('id, user_id, date, title, note, data, profiles(username, display_name), reactions(user_id), comments(id, user_id, body, created_at, profiles(username))')
+    .select(FEED_SELECT)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
     .order('created_at', { referencedTable: 'comments', ascending: true })
     .limit(50)
+  fail(error)
+  return (data ?? []) as unknown as FeedItem[]
+}
+
+/** Every workout a friend has shared (newest first). RLS only returns rows if you are friends. */
+export async function fetchFriendLog(friendId: string): Promise<FeedItem[]> {
+  const { data, error } = await sb()
+    .from('shared_workouts')
+    .select(FEED_SELECT)
+    .eq('user_id', friendId)
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('created_at', { referencedTable: 'comments', ascending: true })
+    .limit(1000)
   fail(error)
   return (data ?? []) as unknown as FeedItem[]
 }

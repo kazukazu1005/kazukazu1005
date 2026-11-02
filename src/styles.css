@@ -130,3 +130,5 @@ fieldset.choice .check { display: flex; }
 .day-entry:first-of-type { margin-top: 6px; }
 ol.sets { margin: 4px 0 0; padding-left: 1.5rem; }
 ol.sets li { padding: 1px 0; font-variant-numeric: tabular-nums; }
+
+button.link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--accent-ink); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }

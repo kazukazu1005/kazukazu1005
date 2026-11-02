@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { Auth } from '../App'
 import type { AppData } from '../data'
-import { formatPace, pace } from '../calc'
+import Calendar from '../components/Calendar'
+import SharedCard from '../components/SharedCard'
+import { toDateStr } from '../calc'
 import {
-  addComment, addFriend, createProfile, deleteComment, fetchFeed, fetchFriends, fetchMyCode, regenerateCode, removeFriend,
-  setLike, signIn, signOut, signUp, type FeedItem, type Profile, type SharedEntry,
+  addFriend, createProfile, fetchFeed, fetchFriendLog, fetchFriends, fetchMyCode, regenerateCode, removeFriend,
+  signIn, signOut, signUp, type FeedItem, type Profile,
 } from '../social'
 import { sharingConfigured } from '../supabase'
 
@@ -101,27 +103,20 @@ function ProfileForm({ onDone }: { onDone: () => Promise<void> }) {
 
 function SignedIn({ data, auth, me }: { data: AppData; auth: Auth; me: Profile }) {
   const [tab, setTab] = useState<'feed' | 'friends'>('feed')
+  const [viewing, setViewing] = useState<Profile | null>(null)
+  if (viewing) return <FriendLog me={me} friend={viewing} onBack={() => setViewing(null)} />
   return (
     <>
       <div className="chips" role="group" aria-label="Section">
         <button className="chip" aria-pressed={tab === 'feed'} onClick={() => setTab('feed')}>Feed</button>
         <button className="chip" aria-pressed={tab === 'friends'} onClick={() => setTab('friends')}>Friends & account</button>
       </div>
-      {tab === 'feed' ? <Feed me={me} data={data} /> : <Friends me={me} auth={auth} />}
+      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} /> : <Friends me={me} auth={auth} onOpen={setViewing} />}
     </>
   )
 }
 
-function describe(e: SharedEntry): string {
-  const sets = e.sets.filter((s) => !s.warmup)
-  if (e.kind === 'weight') return sets.map((s) => `${s.weight ?? 0}×${s.reps ?? 0}`).join('  ')
-  if (e.kind === 'bodyweight') return sets.map((s) => `${s.reps ?? 0}`).join('  ') + ' reps'
-  const km = sets.reduce((a, s) => a + (s.distanceKm ?? 0), 0)
-  const min = sets.reduce((a, s) => a + (s.durationMin ?? 0), 0)
-  return `${Math.round(km * 10) / 10} km · ${Math.round(min)} min · ${formatPace(pace(min, km))} /km`
-}
-
-function Feed({ me }: { me: Profile; data: AppData }) {
+function Feed({ me, onOpen }: { me: Profile; data: AppData; onOpen: (p: Profile) => void }) {
   const [items, setItems] = useState<FeedItem[] | null>(null)
   const [error, setError] = useState('')
   const load = useCallback(async () => {
@@ -144,63 +139,65 @@ function Feed({ me }: { me: Profile; data: AppData }) {
       <button className="btn secondary small" onClick={load}>Refresh</button>
       {items === null && !error && <p>Loading…</p>}
       {items?.length === 0 && <p className="sub">Nothing here yet. Tick “Share with friends” when you log a workout, and add friends in the next tab.</p>}
-      {items?.map((it) => {
-        const liked = it.reactions.some((r) => r.user_id === me.id)
-        return (
-          <article key={it.id} className="card" aria-label={`${it.profiles?.username ?? 'user'} ${it.date}`}>
-            <div className="row spread">
-              <h3>{it.profiles?.display_name || it.profiles?.username} <span className="sub">@{it.profiles?.username}</span></h3>
-              <span className="sub">{it.date}</span>
-            </div>
-            {it.title && <p style={{ margin: '4px 0', fontWeight: 600 }}>{it.title}</p>}
-            {it.data.entries.map((e, i) => (
-              <div key={i} style={{ margin: '6px 0' }}>
-                <b>{e.name}</b> {e.prs.map((p) => <span key={p} className="badge" style={{ marginLeft: 4 }}>PR: {p}</span>)}
-                <div className="sub">{describe(e)}</div>
-              </div>
-            ))}
-            {it.note && <p className="sub" style={{ whiteSpace: 'pre-wrap' }}>{it.note}</p>}
-            <div className="row" style={{ marginTop: 8 }}>
-              <button className="btn secondary small" aria-pressed={liked} onClick={() => act(() => setLike(it.id, me.id, !liked))}>
-                {liked ? 'Liked' : 'Like'} · {it.reactions.length}
-              </button>
-            </div>
-            {it.comments.map((c) => (
-              <div key={c.id} className="comment row spread">
-                <span><b>{c.profiles?.username ?? 'user'}</b> {c.body}</span>
-                {(c.user_id === me.id || it.user_id === me.id) && (
-                  <button className="btn danger small" aria-label="Delete comment" onClick={() => act(() => deleteComment(c.id))}>Delete</button>
-                )}
-              </div>
-            ))}
-            <CommentBox onSend={(body) => act(() => addComment(it.id, me.id, body))} />
-          </article>
-        )
-      })}
+      {items?.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} onOpenAuthor={onOpen} />)}
     </>
   )
 }
 
-function CommentBox({ onSend }: { onSend: (body: string) => Promise<void> }) {
-  const [body, setBody] = useState('')
+function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBack: () => void }) {
+  const [items, setItems] = useState<FeedItem[] | null>(null)
+  const [error, setError] = useState('')
+  const [selected, setSelected] = useState(toDateStr(new Date()))
+  const load = useCallback(async () => {
+    try {
+      setItems(await fetchFriendLog(friend.id))
+      setError('')
+    } catch (e) {
+      setError(errText(e))
+    }
+  }, [friend.id])
+  useEffect(() => { void load() }, [load])
+  const act = async (f: () => Promise<void>) => {
+    try { await f(); await load() } catch (e) { setError(errText(e)) }
+  }
+
+  const byDate = useMemo(() => {
+    const m = new Map<string, FeedItem[]>()
+    for (const it of items ?? []) m.set(it.date, [...(m.get(it.date) ?? []), it])
+    return m
+  }, [items])
+  const marks = (date: string) => {
+    const list = byDate.get(date) ?? []
+    const kinds = list.flatMap((w) => w.data.entries.map((e) => e.kind))
+    return { strength: kinds.some((k) => k !== 'cardio'), cardio: kinds.includes('cardio'), count: list.length }
+  }
+  const day = byDate.get(selected) ?? []
+  const selLabel = new Date(selected + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+  const name = friend.display_name || friend.username
+
   return (
-    <form
-      className="row"
-      style={{ marginTop: 8 }}
-      onSubmit={async (e) => {
-        e.preventDefault()
-        if (!body.trim()) return
-        await onSend(body.trim())
-        setBody('')
-      }}
-    >
-      <input type="text" className="grow" aria-label="Write a comment" placeholder="Write a comment" maxLength={500} value={body} onChange={(e) => setBody(e.target.value)} style={{ width: 'auto' }} />
-      <button className="btn secondary small">Send</button>
-    </form>
+    <>
+      <div className="row spread">
+        <button className="btn secondary small" onClick={onBack}>‹ Back</button>
+        <button className="btn secondary small" onClick={load}>Refresh</button>
+      </div>
+      <h2 style={{ marginTop: 12 }}>{name} <span className="sub">@{friend.username}</span></h2>
+      {error && <div role="alert" className="msg">{error}</div>}
+      {items === null && !error && <p>Loading…</p>}
+      {items && (
+        <>
+          <p className="sub">{items.length} shared {items.length === 1 ? 'workout' : 'workouts'} in total. Only workouts {name} chose to share appear here.</p>
+          <Calendar marks={marks} selected={selected} onSelect={setSelected} />
+          <h2>{selLabel}</h2>
+          {day.length === 0 && <p className="sub">Nothing shared on this day.</p>}
+          {day.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} detail />)}
+        </>
+      )}
+    </>
   )
 }
 
-function Friends({ me, auth }: { me: Profile; auth: Auth }) {
+function Friends({ me, auth, onOpen }: { me: Profile; auth: Auth; onOpen: (p: Profile) => void }) {
   const [friends, setFriends] = useState<Profile[]>([])
   const [code, setCode] = useState('')
   const [input, setInput] = useState('')
@@ -251,7 +248,10 @@ function Friends({ me, auth }: { me: Profile; auth: Auth }) {
         {friends.map((f) => (
           <div key={f.id} className="row spread comment">
             <span>{f.display_name || f.username} <span className="sub">@{f.username}</span></span>
-            <button className="btn danger small" onClick={() => confirm(`Remove @${f.username}? You will stop seeing each other's workouts.`) && run(() => removeFriend(me.id, f.id), 'Friend removed.')}>Remove</button>
+            <span className="row">
+              <button className="btn secondary small" onClick={() => onOpen(f)}>View log</button>
+              <button className="btn danger small" onClick={() => confirm(`Remove @${f.username}? You will stop seeing each other's workouts.`) && run(() => removeFriend(me.id, f.id), 'Friend removed.')}>Remove</button>
+            </span>
           </div>
         ))}
       </section>
