@@ -10,14 +10,14 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: '筋トレメモ',
-        short_name: '筋トレメモ',
-        description: '筋トレ・有酸素の記録アプリ',
-        lang: 'ja',
+        name: 'Kintore Memo',
+        short_name: 'Kintore Memo',
+        description: 'Workout and cardio log',
+        lang: 'en',
         start_url: './',
         display: 'standalone',
         background_color: '#ffffff',
-        theme_color: '#0017c1',
+        theme_color: '#2383e2',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
         ],

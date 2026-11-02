@@ -19,11 +19,11 @@ export async function buildBackup() {
 export function validateBackup(data: unknown): { workouts: Workout[]; customExercises: Exercise[] } {
   const d = data as { format?: string; workouts?: unknown; customExercises?: unknown }
   if (!d || d.format !== FORMAT || !Array.isArray(d.workouts) || !Array.isArray(d.customExercises)) {
-    throw new Error('筋トレメモのバックアップファイルではありません。')
+    throw new Error('This is not a Kintore Memo backup file.')
   }
   for (const w of d.workouts as Workout[]) {
     if (typeof w.id !== 'string' || typeof w.date !== 'string' || !Array.isArray(w.entries)) {
-      throw new Error('ワークアウトのデータ形式が正しくありません。')
+      throw new Error('The workout data format is invalid.')
     }
   }
   return { workouts: d.workouts as Workout[], customExercises: d.customExercises as Exercise[] }
@@ -38,7 +38,7 @@ const csvCell = (v: unknown) => {
 
 export function buildCsv(workouts: Workout[], custom: Exercise[]): string {
   const map = new Map([...PRESET_EXERCISES, ...custom].map((e) => [e.id, e]))
-  const rows = [['日付', 'タイトル', '種目', '部位', 'セット', 'ウォームアップ', '重量kg', '回数', '時間分', '距離km', 'ペース分/km']]
+  const rows = [['Date', 'Title', 'Exercise', 'Part', 'Set', 'Warm-up', 'Weight kg', 'Reps', 'Minutes', 'Distance km', 'Pace min/km']]
   const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date))
   for (const w of sorted) {
     for (const e of w.entries) {

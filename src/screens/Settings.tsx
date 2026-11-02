@@ -13,46 +13,46 @@ export default function Settings({ data }: { data: AppData }) {
     if (!f) return
     try {
       const n = await importBackup(await f.text())
-      setMsg({ type: 'ok', text: `${n}件のワークアウトを読み込みました。` })
+      setMsg({ type: 'ok', text: `Imported ${n} workouts.` })
     } catch (e) {
-      setMsg({ type: 'error', text: e instanceof Error ? e.message : '読み込みに失敗しました。' })
+      setMsg({ type: 'error', text: e instanceof Error ? e.message : 'Import failed.' })
     }
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const onDeleteAll = async () => {
-    if (!confirm('すべての記録を削除します。この操作は元に戻せません。先にバックアップを保存することをおすすめします。続けますか？')) return
+    if (!confirm('Delete all local records? This cannot be undone. Export a backup first. (Workouts already shared with friends stay on the server until you unshare or delete them one by one.)')) return
     await db.transaction('rw', db.workouts, db.customExercises, async () => {
       await db.workouts.clear()
       await db.customExercises.clear()
     })
-    setMsg({ type: 'ok', text: 'すべてのデータを削除しました。' })
+    setMsg({ type: 'ok', text: 'All local data deleted.' })
   }
 
   return (
     <>
-      {msg && <div role={msg.type === 'error' ? 'alert' : 'status'} className={`msg ${msg.type}`}>{msg.text}</div>}
+      {msg && <div role={msg.type === 'error' ? 'alert' : 'status'} className={`msg ${msg.type === 'ok' ? 'ok' : ''}`}>{msg.text}</div>}
       <section className="card">
-        <h2 style={{ marginTop: 0 }}>データの書き出し</h2>
-        <p className="sub">記録はこの端末のブラウザ内に保存されています。機種変更や万一に備えて、定期的に保存してください。</p>
+        <h2 style={{ marginTop: 0 }}>Export</h2>
+        <p className="sub">Your log lives in this browser. Save a backup now and then, especially before switching phones.</p>
         <div className="row">
           <button className="btn" onClick={async () => download(`kintore-memo-${today}.json`, JSON.stringify(await buildBackup(), null, 2), 'application/json')}>
-            バックアップ（JSON）
+            Backup (JSON)
           </button>
           <button className="btn secondary" onClick={() => download(`kintore-memo-${today}.csv`, buildCsv(data.workouts, data.custom), 'text/csv;charset=utf-8')}>
-            表計算用（CSV）
+            Spreadsheet (CSV)
           </button>
         </div>
       </section>
       <section className="card">
-        <h2 style={{ marginTop: 0 }}>データの読み込み</h2>
-        <p className="sub">バックアップ（JSON）を選ぶと、記録を追加・上書きします。</p>
-        <label className="field" htmlFor="import">バックアップファイル</label>
+        <h2 style={{ marginTop: 0 }}>Import</h2>
+        <p className="sub">Choose a backup (JSON). Records are added or overwritten by ID.</p>
+        <label className="field" htmlFor="import">Backup file</label>
         <input id="import" ref={fileRef} type="file" accept="application/json,.json" onChange={(e) => onImport(e.target.files?.[0])} />
       </section>
       <section className="card">
-        <h2 style={{ marginTop: 0 }}>すべてのデータを削除</h2>
-        <button className="btn danger" onClick={onDeleteAll}>すべて削除する</button>
+        <h2 style={{ marginTop: 0 }}>Delete everything</h2>
+        <button className="btn danger" onClick={onDeleteAll}>Delete all local data</button>
       </section>
     </>
   )

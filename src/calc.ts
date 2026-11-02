@@ -69,7 +69,7 @@ export function statsFor(exerciseId: string, workouts: Workout[]): ExerciseStat[
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
-export type PRType = '推定1RM' | '最大重量' | '最大回数' | '最長距離' | '最速ペース'
+export type PRType = 'Est. 1RM' | 'Max weight' | 'Max reps' | 'Longest distance' | 'Best pace'
 
 /**
  * 指定ワークアウトの指定種目で更新された自己ベストを返す。
@@ -86,14 +86,14 @@ export function detectPRs(entry: Entry, exercise: Exercise, date: string, workou
   const prs: PRType[] = []
   const max = (f: (s: ExerciseStat) => number) => Math.max(...past.map(f))
   if (exercise.kind === 'weight') {
-    if (now.best1RM > max((s) => s.best1RM)) prs.push('推定1RM')
-    if (now.maxWeight > max((s) => s.maxWeight)) prs.push('最大重量')
+    if (now.best1RM > max((s) => s.best1RM)) prs.push('Est. 1RM')
+    if (now.maxWeight > max((s) => s.maxWeight)) prs.push('Max weight')
   } else if (exercise.kind === 'bodyweight') {
-    if (now.maxReps > max((s) => s.maxReps)) prs.push('最大回数')
+    if (now.maxReps > max((s) => s.maxReps)) prs.push('Max reps')
   } else {
-    if (now.distance > max((s) => s.distance)) prs.push('最長距離')
+    if (now.distance > max((s) => s.distance)) prs.push('Longest distance')
     const paces = past.map((s) => s.bestPace).filter((p): p is number => p !== null)
-    if (now.bestPace !== null && paces.length > 0 && now.bestPace < Math.min(...paces)) prs.push('最速ペース')
+    if (now.bestPace !== null && paces.length > 0 && now.bestPace < Math.min(...paces)) prs.push('Best pace')
   }
   return prs
 }

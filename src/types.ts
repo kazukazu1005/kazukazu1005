@@ -29,12 +29,16 @@ export interface Workout {
   title: string
   note: string
   entries: Entry[]
+  /** 'friends' = shared with friends (needs sign-in). Missing = private. */
+  visibility?: 'private' | 'friends'
+  /** For 'friends' workouts: true once the latest version reached the server. */
+  synced?: boolean
   createdAt: number
   updatedAt: number
 }
 
 export const KIND_LABEL: Record<ExerciseKind, string> = {
-  weight: '重量（重量×回数）',
-  bodyweight: '自重（回数）',
-  cardio: '有酸素（時間・距離）',
+  weight: 'Weights (kg × reps)',
+  bodyweight: 'Bodyweight (reps)',
+  cardio: 'Cardio (time, distance)',
 }
