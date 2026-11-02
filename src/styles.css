@@ -114,3 +114,19 @@ svg.chart { width: 100%; height: auto; }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
 .dot.strength { background: var(--ink); }
 .dot.cardio { background: var(--accent); }
+
+/* body-part picker */
+.parts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+.part-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-height: 64px; padding: 10px 14px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--bg); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.part-tile:hover { background: var(--hover); }
+.part-tile b { font-size: 1.0625rem; }
+fieldset.choice { border: 0; margin: 0 0 12px; padding: 0; }
+fieldset.choice legend { padding: 0; }
+fieldset.choice .check { display: flex; }
+.day-entry { padding: 10px 0 2px; border-top: 1px solid var(--line); margin-top: 10px; }
+.day-entry:first-of-type { margin-top: 6px; }
+ol.sets { margin: 4px 0 0; padding-left: 1.5rem; }
+ol.sets li { padding: 1px 0; font-variant-numeric: tabular-nums; }

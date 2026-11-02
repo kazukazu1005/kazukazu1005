@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AppData } from '../data'
+import { PARTS } from '../exercises'
 import { formatPace, statsFor, type ExerciseStat } from '../calc'
 
 interface Metric { key: string; label: string; unit: string; get: (s: ExerciseStat) => number | null; fmt?: (n: number) => string }
@@ -66,11 +67,15 @@ export default function Progress({ data }: { data: AppData }) {
 
   return (
     <>
-      <div className="field-group">
-        <label className="field" htmlFor="ex">Exercise</label>
-        <select id="ex" value={ex.id} onChange={(e) => { setExId(e.target.value); setMKey('') }}>
-          {list.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
+      <div className="chips" role="group" aria-label="Body part">
+        {PARTS.filter((p) => list.some((e) => e.part === p)).map((p) => (
+          <button key={p} className="chip" aria-pressed={p === ex.part} onClick={() => { setExId(list.find((e) => e.part === p)!.id); setMKey('') }}>{p}</button>
+        ))}
+      </div>
+      <div className="chips" role="group" aria-label="Exercise">
+        {list.filter((e) => e.part === ex.part).map((e) => (
+          <button key={e.id} className="chip" aria-pressed={e.id === ex.id} onClick={() => { setExId(e.id); setMKey('') }}>{e.name}</button>
+        ))}
       </div>
       <div className="chips" role="group" aria-label="Metric">
         {metrics.map((m) => (

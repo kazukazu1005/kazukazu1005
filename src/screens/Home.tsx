@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Route } from '../App'
 import type { AppData } from '../data'
+import { describeSet } from '../format'
 import { monthGrid, toDateStr, weekStart, weekStreak, workoutVolume } from '../calc'
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -98,16 +99,36 @@ export default function Home({ data, go }: { data: AppData; go: (r: Route) => vo
       <h2>{selLabel}</h2>
       {dayWorkouts.length === 0 && <p className="sub">No workouts on this day.</p>}
       {dayWorkouts.map((w) => (
-        <button key={w.id} className="card list-btn" onClick={() => go({ name: 'edit', id: w.id })}>
+        <article key={w.id} className="card">
           <div className="row spread">
             <h3>{w.title || 'Workout'}</h3>
             <span className="row">
               {w.visibility === 'friends' && <span className={`badge${w.synced ? '' : ' plain'}`}>{w.synced ? 'Shared' : 'Share pending'}</span>}
-              <span className="sub">{w.entries.length} {w.entries.length === 1 ? 'exercise' : 'exercises'}</span>
+              <button className="btn secondary small" onClick={() => go({ name: 'edit', id: w.id })}>Edit</button>
             </span>
           </div>
-          <div className="sub">{w.entries.map((e) => data.exercises.get(e.exerciseId)?.name ?? '(deleted exercise)').join(', ') || 'No exercises'}</div>
-        </button>
+          {w.entries.map((e) => {
+            const ex = data.exercises.get(e.exerciseId)
+            return (
+              <div key={e.id} className="day-entry">
+                <div className="row spread">
+                  <b>{ex?.name ?? '(deleted exercise)'}</b>
+                  {ex && <span className="badge plain">{ex.part}</span>}
+                </div>
+                <ol className="sets">
+                  {e.sets.map((st) => (
+                    <li key={st.id}>
+                      {ex ? describeSet(st, ex.kind) : ''}
+                      {st.warmup && <span className="sub"> (warm-up)</span>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )
+          })}
+          {w.entries.length === 0 && <p className="sub">No exercises.</p>}
+          {w.note && <p className="sub" style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>{w.note}</p>}
+        </article>
       ))}
       <button className="btn block" onClick={() => go({ name: 'edit', date: selected })}>
         {selected === todayStr ? 'Log a workout' : `Log a workout on ${selected.slice(5).replace('-', '/')}`}

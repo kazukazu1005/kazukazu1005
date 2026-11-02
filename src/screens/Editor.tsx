@@ -4,6 +4,7 @@ import type { AppData } from '../data'
 import { db, uid } from '../db'
 import { detectPRs, formatPace, pace, toDateStr } from '../calc'
 import { PARTS, newCustomExercise } from '../exercises'
+import { describeSet } from '../format'
 import { buildPayload, pushWorkout, removeShared } from '../social'
 import { sharingConfigured } from '../supabase'
 import { KIND_LABEL, type Entry, type Exercise, type ExerciseKind, type SetRec, type Workout } from '../types'
@@ -17,12 +18,6 @@ function lastRecord(data: AppData, exerciseId: string, date: string, selfId: str
     if (e && e.sets.length) return { date: w.date, sets: e.sets }
   }
   return null
-}
-
-function describeSet(s: SetRec, kind: ExerciseKind): string {
-  if (kind === 'weight') return `${s.weight ?? 0}kg×${s.reps ?? 0}`
-  if (kind === 'bodyweight') return `${s.reps ?? 0} reps`
-  return `${s.distanceKm ?? 0} km / ${s.durationMin ?? 0} min`
 }
 
 export default function Editor({ data, auth, id, date, go }: { data: AppData; auth: Auth; id?: string; date?: string; go: (r: Route) => void }) {
@@ -127,7 +122,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
               <button className="btn danger small" onClick={() => setW({ ...w, entries: w.entries.filter((x) => x.id !== e.id) })} aria-label={`Remove ${ex.name}`}>Remove</button>
             </div>
             {prs.length > 0 && <p style={{ margin: '4px 0' }}>{prs.map((p) => <span key={p} className="badge" style={{ marginRight: 4 }}>New PR: {p}</span>)}</p>}
-            {prev && <p className="sub">Last time ({prev.date}): {prev.sets.map((s) => describeSet(s, ex.kind)).join(', ')}</p>}
+            {prev && <p className="sub">Last time ({prev.date}): {prev.sets.map((s) => describeSet(s, ex.kind)).join(' / ')}</p>}
 
             {e.sets.map((s, i) => (
               <div key={s.id}>
@@ -200,15 +195,23 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
 }
 
 function Picker({ data, onPick, onClose }: { data: AppData; onPick: (e: Exercise) => void; onClose: () => void }) {
-  const [part, setPart] = useState<string>('')
-  const [q, setQ] = useState('')
+  // view: null = list of body parts, a part name = exercises in that part, 'create' = new custom exercise
+  const [view, setView] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [q, setQ] = useState('')
   const [name, setName] = useState('')
   const [kind, setKind] = useState<ExerciseKind>('weight')
   const [cPart, setCPart] = useState<string>('Chest')
 
-  const list = data.allExercises.filter((e) => (!part || e.part === part) && e.name.includes(q.trim()))
+  const inPart = (part: string) => data.allExercises.filter((e) => e.part === part)
+  const searching = q.trim() !== ''
+  const found = data.allExercises.filter((e) => e.name.toLowerCase().includes(q.trim().toLowerCase()))
 
+  const startCreate = (part?: string) => {
+    if (part) setCPart(part)
+    setName(q.trim())
+    setCreating(true)
+  }
   const create = async () => {
     if (!name.trim()) return
     const ex = newCustomExercise(name, kind, kind === 'cardio' ? 'Cardio' : cPart)
@@ -216,53 +219,84 @@ function Picker({ data, onPick, onClose }: { data: AppData; onPick: (e: Exercise
     onPick(ex)
   }
 
+  const row = (e: Exercise) => (
+    <button key={e.id} className="list-btn" onClick={() => onPick(e)}>
+      {e.name}
+      <span className="sub">  {searching ? e.part : ''}{e.custom ? ' · custom' : ''}</span>
+    </button>
+  )
+
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Choose exercise" onClick={(e) => e.stopPropagation()}>
         <div className="row spread">
-          <h2 style={{ margin: 0 }}>Choose exercise</h2>
+          <h2 style={{ margin: 0 }}>{creating ? 'New exercise' : view ?? 'Choose exercise'}</h2>
           <button className="btn secondary small" onClick={onClose}>Close</button>
         </div>
-        {!creating ? (
-          <>
-            <div className="field-group" style={{ marginTop: 8 }}>
-              <label className="field" htmlFor="q">Search</label>
-              <input id="q" type="text" value={q} onChange={(e) => setQ(e.target.value)} />
-            </div>
-            <div className="chips" role="group" aria-label="Body part">
-              <button className="chip" aria-pressed={part === ''} onClick={() => setPart('')}>All</button>
-              {PARTS.map((p) => <button key={p} className="chip" aria-pressed={part === p} onClick={() => setPart(p)}>{p}</button>)}
-            </div>
-            <div>
-              {list.map((e) => <button key={e.id} className="list-btn" onClick={() => onPick(e)}>{e.name}<span className="sub">  {e.part}{e.custom ? ' · custom' : ''}</span></button>)}
-              {list.length === 0 && <p className="sub">Nothing found. You can create your own below.</p>}
-            </div>
-            <button className="btn secondary block" style={{ marginTop: 12 }} onClick={() => { setName(q); setCreating(true) }}>Create custom exercise</button>
-          </>
-        ) : (
+
+        {creating ? (
           <>
             <div className="field-group" style={{ marginTop: 8 }}>
               <label className="field" htmlFor="cn">Name</label>
               <input id="cn" type="text" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <div className="field-group">
-              <label className="field" htmlFor="ck">Tracking type</label>
-              <select id="ck" value={kind} onChange={(e) => setKind(e.target.value as ExerciseKind)}>
-                {(Object.keys(KIND_LABEL) as ExerciseKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-              </select>
-            </div>
+            <fieldset className="choice">
+              <legend className="field">Tracking type</legend>
+              {(Object.keys(KIND_LABEL) as ExerciseKind[]).map((k) => (
+                <label key={k} className="check">
+                  <input type="radio" name="kind" checked={kind === k} onChange={() => setKind(k)} />
+                  {KIND_LABEL[k]}
+                </label>
+              ))}
+            </fieldset>
             {kind !== 'cardio' && (
               <div className="field-group">
-                <label className="field" htmlFor="cp">Body part</label>
-                <select id="cp" value={cPart} onChange={(e) => setCPart(e.target.value)}>
-                  {PARTS.filter((p) => p !== 'Cardio').map((p) => <option key={p}>{p}</option>)}
-                </select>
+                <div className="field" id="cp-label">Body part</div>
+                <div className="chips" role="group" aria-labelledby="cp-label">
+                  {PARTS.filter((p) => p !== 'Cardio').map((p) => (
+                    <button key={p} className="chip" aria-pressed={cPart === p} onClick={() => setCPart(p)}>{p}</button>
+                  ))}
+                </div>
               </div>
             )}
             <div className="row">
               <button className="btn grow" disabled={!name.trim()} onClick={create}>Create and add</button>
               <button className="btn secondary" onClick={() => setCreating(false)}>Back</button>
             </div>
+          </>
+        ) : view !== null && !searching ? (
+          <>
+            <button className="btn secondary small" style={{ margin: '8px 0' }} onClick={() => setView(null)}>‹ All body parts</button>
+            <div>{inPart(view).map(row)}</div>
+            <button className="btn secondary block" style={{ marginTop: 12 }} onClick={() => startCreate(view === 'Cardio' ? undefined : view)}>
+              Create custom exercise
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="field-group" style={{ marginTop: 8 }}>
+              <label className="field" htmlFor="q">Search</label>
+              <input id="q" type="text" placeholder="e.g. squat" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            {searching ? (
+              <>
+                <div>{found.map(row)}</div>
+                {found.length === 0 && <p className="sub">Nothing found.</p>}
+                <button className="btn secondary block" style={{ marginTop: 12 }} onClick={() => startCreate()}>Create “{q.trim()}” as custom exercise</button>
+              </>
+            ) : (
+              <>
+                <div className="parts" role="group" aria-label="Body parts">
+                  {PARTS.map((p) => (
+                    <button key={p} className="part-tile" onClick={() => setView(p)}>
+                      <b>{p}</b>
+                      <span className="sub">{inPart(p).length} exercises</span>
+                    </button>
+                  ))}
+                </div>
+                <button className="btn secondary block" style={{ marginTop: 12 }} onClick={() => startCreate()}>Create custom exercise</button>
+              </>
+            )}
           </>
         )}
       </div>
