@@ -211,5 +211,3 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 /* "new activity" dot on the Friends tab */
 .tab-label { position: relative; display: inline-block; }
 .notify-dot { position: absolute; top: -2px; right: -10px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
-
-input::placeholder, textarea::placeholder { color: var(--ink-sub); opacity: 1; }

@@ -5,18 +5,13 @@ import { db, uid } from '../db'
 import { detectPRs, isFilledSet, toDateStr } from '../calc'
 import { PARTS, newCustomExercise } from '../exercises'
 import { clearDraft, hasContent, loadDraft, saveDraft } from '../draft'
-import { fillFromPrevious, retargetEntry } from '../entryOps'
+import { retargetEntry } from '../entryOps'
 import { describeSet, fmtKg, setRM } from '../format'
 import { buildPayload, pushWorkout, removeShared } from '../social'
 import { sharingConfigured } from '../supabase'
 import { KIND_LABEL, type Entry, type Exercise, type ExerciseKind, type SetRec, type Workout } from '../types'
 
 const num = (v: string): number | undefined => (v === '' || isNaN(Number(v)) || Number(v) < 0 ? undefined : Number(v))
-
-/** Last time's values for set number i (falls back to its last set), shown faintly in empty boxes. */
-function hint(prev: { sets: SetRec[] } | null, i: number): SetRec | undefined {
-  return prev ? prev.sets[i] ?? prev.sets[prev.sets.length - 1] : undefined
-}
 
 function lastRecord(data: AppData, exerciseId: string, date: string, selfId: string): { date: string; sets: SetRec[] } | null {
   for (const w of data.workouts) {
@@ -172,12 +167,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
               </span>
             </div>
             {prs.length > 0 && <p style={{ margin: '4px 0' }}>{prs.map((p) => <span key={p} className="badge" style={{ marginRight: 4 }}>New PR: {p}</span>)}</p>}
-            {prev && (
-              <div className="row spread" style={{ margin: '4px 0 8px' }}>
-                <span className="sub">Last time ({prev.date}): {prev.sets.map((s) => describeSet(s, ex.kind)).join(' / ')}</span>
-                <button className="btn secondary small" onClick={() => patchEntry(e.id, (x) => ({ ...x, sets: fillFromPrevious(x.sets, prev.sets, uid) }))}>Fill with last time</button>
-              </div>
-            )}
+            {prev && <p className="sub">Last time ({prev.date}): {prev.sets.map((s) => describeSet(s, ex.kind)).join(' / ')}</p>}
 
             {e.sets.map((s, i) => (
               <div key={s.id}>
@@ -185,13 +175,13 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
                   <span className="num">{i + 1}</span>
                   {ex.kind === 'weight' && (
                     <>
-                      <div><label className="sub" htmlFor={`w${s.id}`}>Weight (kg)</label><input id={`w${s.id}`} type="number" inputMode="decimal" min="0" step="0.5" value={s.weight ?? ''} placeholder={hint(prev, i)?.weight?.toString() ?? ''} onChange={(ev) => patchSet(e.id, s.id, { weight: num(ev.target.value) })} /></div>
-                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} placeholder={hint(prev, i)?.reps?.toString() ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
+                      <div><label className="sub" htmlFor={`w${s.id}`}>Weight (kg)</label><input id={`w${s.id}`} type="number" inputMode="decimal" min="0" step="0.5" value={s.weight ?? ''} onChange={(ev) => patchSet(e.id, s.id, { weight: num(ev.target.value) })} /></div>
+                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
                     </>
                   )}
                   {ex.kind === 'bodyweight' && (
                     <>
-                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} placeholder={hint(prev, i)?.reps?.toString() ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
+                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
                       <div />
                     </>
                   )}
