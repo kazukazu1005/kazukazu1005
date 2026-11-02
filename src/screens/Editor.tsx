@@ -25,11 +25,11 @@ function describeSet(s: SetRec, kind: ExerciseKind): string {
   return `${s.distanceKm ?? 0} km / ${s.durationMin ?? 0} min`
 }
 
-export default function Editor({ data, auth, id, go }: { data: AppData; auth: Auth; id?: string; go: (r: Route) => void }) {
+export default function Editor({ data, auth, id, date, go }: { data: AppData; auth: Auth; id?: string; date?: string; go: (r: Route) => void }) {
   const existing = id ? data.workouts.find((w) => w.id === id) : undefined
   const [w, setW] = useState<Workout>(
     () =>
-      existing ?? { id: uid(), date: toDateStr(new Date()), title: '', note: '', entries: [], createdAt: Date.now(), updatedAt: Date.now() },
+      existing ?? { id: uid(), date: date ?? toDateStr(new Date()), title: '', note: '', entries: [], createdAt: Date.now(), updatedAt: Date.now() },
   )
   const [picker, setPicker] = useState(false)
   const [error, setError] = useState('')

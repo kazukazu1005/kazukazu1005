@@ -97,3 +97,20 @@ nav.tabs button[aria-current='page'] { color: var(--ink); font-weight: 700; box-
 svg.chart { width: 100%; height: auto; }
 .comment { padding: 6px 0; border-top: 1px solid var(--line); }
 .divider { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+
+/* calendar */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-top: 8px; }
+.cal-dow { text-align: center; font-size: 0.75rem; color: var(--ink-sub); padding: 4px 0; }
+.cal-day {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
+  min-height: 52px; padding: 4px 0; border: 0; border-radius: var(--radius); background: none; color: var(--ink); font: inherit; cursor: pointer;
+}
+.cal-day:hover { background: var(--hover); }
+.cal-num { width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; font-size: 0.9375rem; }
+.cal-day[aria-current='date'] .cal-num { box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-day[aria-pressed='true'] { background: var(--hover); }
+.cal-day[aria-pressed='true'] .cal-num { background: var(--ink); color: #fff; box-shadow: none; }
+.cal-dots { display: flex; gap: 3px; height: 8px; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.dot.strength { background: var(--ink); }
+.dot.cardio { background: var(--accent); }

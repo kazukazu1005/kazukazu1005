@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectPRs, estimate1RM, formatPace, pace, statsFor, weekStreak } from './calc'
+import { monthGrid, detectPRs, estimate1RM, formatPace, pace, statsFor, weekStreak } from './calc'
 import type { Exercise, Workout } from './types'
 
 const bench: Exercise = { id: 'bench', name: 'Bench', kind: 'weight', part: 'Chest' }
@@ -47,5 +47,13 @@ describe('calc', () => {
     ]
     expect(weekStreak(ws, new Date(2026, 10, 2))).toBe(2) // 2026-11-02(月)
     expect(weekStreak([], new Date(2026, 10, 2))).toBe(0)
+  })
+  it('monthGrid is Monday-first and whole weeks', () => {
+    const g = monthGrid(2026, 10) // Nov 2026: Nov 1 is Sunday
+    expect(g.length % 7).toBe(0)
+    expect(g.slice(0, 6).every((c) => c === null)).toBe(true)
+    expect(g[6]).toBe('2026-11-01')
+    expect(g.filter(Boolean).length).toBe(30)
+    expect(monthGrid(2026, 1)[6]).toBe('2026-02-01') // Feb 1 2026 is Sunday, so 6 blanks first
   })
 })

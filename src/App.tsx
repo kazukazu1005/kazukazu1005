@@ -7,7 +7,7 @@ import Progress from './screens/Progress'
 import Settings from './screens/Settings'
 import Social from './screens/Social'
 
-export type Route = { name: 'home' } | { name: 'edit'; id?: string } | { name: 'social' } | { name: 'progress' } | { name: 'settings' }
+export type Route = { name: 'home' } | { name: 'edit'; id?: string; date?: string } | { name: 'social' } | { name: 'progress' } | { name: 'settings' }
 export type Auth = ReturnType<typeof useAuth>
 
 export default function App() {
@@ -39,7 +39,7 @@ export default function App() {
         ) : route.name === 'home' ? (
           <Home data={data} go={setRoute} />
         ) : route.name === 'edit' ? (
-          <Editor key={route.id ?? 'new'} data={data} auth={auth} id={route.id} go={setRoute} />
+          <Editor key={(route.id ?? 'new') + (route.date ?? '')} data={data} auth={auth} id={route.id} date={route.date} go={setRoute} />
         ) : route.name === 'social' ? (
           <Social data={data} auth={auth} />
         ) : route.name === 'progress' ? (
