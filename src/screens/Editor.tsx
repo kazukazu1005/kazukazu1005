@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { Auth, Route } from '../App'
 import type { AppData } from '../data'
 import { db, uid } from '../db'
-import { detectPRs, isFilledSet, toDateStr } from '../calc'
+import { detectPRs, isFilledSet, new1RMRecord, toDateStr } from '../calc'
+import { celebrate } from '../celebrate'
 import { PARTS, newCustomExercise } from '../exercises'
 import { clearDraft, hasContent, loadDraft, saveDraft } from '../draft'
 import { retargetEntry } from '../entryOps'
@@ -91,6 +92,16 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
     try { await doSave() } finally { setSaving(false) }
   }
 
+  // A new personal best for estimated 1RM? Compare with what was saved before this save.
+  const celebrateRecords = (saved: Workout) =>
+    celebrate(
+      saved.entries.flatMap((e) => {
+        const ex = data.exercises.get(e.exerciseId)
+        const r = ex ? new1RMRecord(e, ex, data.workouts) : null
+        return ex && r ? [{ name: ex.name, next: r.next, prev: r.prev, date: saved.date }] : []
+      }),
+    )
+
   const doSave = async () => {
     setError('')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(w.date)) return setError('Please enter a date.')
@@ -112,6 +123,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
         finished.current = true
         clearDraft(draftKey)
         setW(next)
+        celebrateRecords(next)
         return setError(`Saved on this device, but sharing failed (it will retry later): ${e instanceof Error ? e.message : 'unknown error'}`)
       }
     }
@@ -120,6 +132,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
     clearDraft(draftKey)
     showToast(next.synced ? 'Saved and shared with friends' : 'Saved on this device')
     go({ name: 'home' })
+    celebrateRecords(next)
   }
 
   const remove = async () => {

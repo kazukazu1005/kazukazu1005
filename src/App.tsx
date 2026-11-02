@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Toaster from './components/Toaster'
+import Celebration from './components/Celebration'
 import Loading from './components/Loading'
 import { useAppData } from './data'
 import { syncPending, useAuth } from './social'
@@ -72,6 +73,7 @@ export default function App() {
         )}
       </main>
       <Toaster />
+      <Celebration />
       <nav className="tabs" aria-label="Main">
         <div className="inner">
           {tabs.map((t) => (
