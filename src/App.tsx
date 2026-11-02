@@ -33,8 +33,8 @@ export default function App() {
   const userId = auth.session?.user.id
   const activity = useFriendActivity(userId, sharingConfigured && !!auth.profile)
   useEffect(() => {
-    if (userId && auth.profile && data.ready) void syncPending(userId, data.workouts, data.exercises)
-  }, [userId, auth.profile, data.ready, data.workouts, data.exercises])
+    if (userId && auth.profile && data.ready && online) void syncPending(userId, data.workouts, data.exercises)
+  }, [userId, auth.profile, data.ready, data.workouts, data.exercises, online])
 
   const tabs: { key: Route['name']; label: string; to: Route }[] = [
     { key: 'home', label: 'Home', to: { name: 'home' } },
