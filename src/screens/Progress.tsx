@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AppData } from '../data'
 import { PARTS } from '../exercises'
-import { formatPace, statsFor, type ExerciseStat } from '../calc'
+import { statsFor, type ExerciseStat } from '../calc'
 
-interface Metric { key: string; label: string; unit: string; get: (s: ExerciseStat) => number | null; fmt?: (n: number) => string }
+interface Metric { key: string; label: string; unit: string; get: (s: ExerciseStat) => number | null }
+interface Point { date: string; v: number }
 
 const METRICS: Record<string, Metric[]> = {
   weight: [
@@ -13,36 +14,105 @@ const METRICS: Record<string, Metric[]> = {
   ],
   bodyweight: [
     { key: 'reps', label: 'Max reps', unit: 'reps', get: (s) => s.maxReps },
-    { key: 'vol', label: 'Total reps', unit: 'reps', get: (s) => s.volume || null },
-  ],
-  cardio: [
-    { key: 'dist', label: 'Distance', unit: 'km', get: (s) => s.distance },
-    { key: 'time', label: 'Time', unit: 'min', get: (s) => s.duration },
-    { key: 'pace', label: 'Pace', unit: 'min/km', get: (s) => s.bestPace, fmt: formatPace },
+    { key: 'vol', label: 'Total reps', unit: 'reps', get: (s) => s.totalReps },
   ],
 }
 
-function Chart({ points, metric }: { points: { date: string; v: number }[]; metric: Metric }) {
-  const W = 320, H = 180, P = { l: 40, r: 12, t: 12, b: 28 }
-  const fmt = metric.fmt ?? ((n: number) => String(Math.round(n * 10) / 10))
-  if (points.length === 0) return <p className="sub">No data to show.</p>
+const fmt = (n: number) => String(Math.round(n * 10) / 10)
+const longDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+// chart geometry
+const H = 220
+const TOP = 28
+const BOTTOM = 36
+const PADX = 28
+const STEP = 64 // minimum horizontal distance between recorded days; more points than fit -> scroll
+const AXIS_W = 44
+
+/**
+ * Line chart with every recorded day labeled underneath.
+ * Tap (or focus + Enter) a point to read its value. When the points do not fit, the plot scrolls
+ * sideways while the value axis stays put. Mount it with a key so selection and scroll reset.
+ */
+function Chart({ points, metric }: { points: Point[]; metric: Metric }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [viewW, setViewW] = useState(280)
+  const [sel, setSel] = useState(points.length - 1)
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setViewW(el.clientWidth)
+    const ro = new ResizeObserver(() => setViewW(el.clientWidth))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const n = points.length
+  const innerW = Math.max(viewW, PADX * 2 + (n - 1) * STEP)
+
+  // show the newest records first
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [n, innerW])
+
   const vs = points.map((p) => p.v)
-  let lo = Math.min(...vs), hi = Math.max(...vs)
-  if (lo === hi) { lo -= 1; hi += 1 }
-  const x = (i: number) => P.l + (points.length === 1 ? (W - P.l - P.r) / 2 : (i * (W - P.l - P.r)) / (points.length - 1))
-  const y = (v: number) => P.t + (1 - (v - lo) / (hi - lo)) * (H - P.t - P.b)
-  const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.v)}`).join(' ')
+  let lo = Math.min(...vs)
+  let hi = Math.max(...vs)
+  const pad = (hi - lo) * 0.2 || Math.max(1, hi * 0.1)
+  lo = Math.max(0, lo - pad)
+  hi = hi + pad
+  const plotH = H - TOP - BOTTOM
+  const y = (v: number) => TOP + (1 - (v - lo) / (hi - lo)) * plotH
+  const x = (i: number) => (n === 1 ? innerW / 2 : PADX + (i * (innerW - PADX * 2)) / (n - 1))
+  const ticks = [hi, (hi + lo) / 2, lo]
+  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.v)}`).join(' ')
+  const cur = points[Math.min(sel, n - 1)]
+
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${metric.label} trend. Latest: ${fmt(points[points.length - 1].v)}${metric.unit}`}>
-      <line x1={P.l} y1={H - P.b} x2={W - P.r} y2={H - P.b} stroke="#a5a29b" />
-      <line x1={P.l} y1={P.t} x2={P.l} y2={H - P.b} stroke="#a5a29b" />
-      <text x={P.l - 4} y={P.t + 8} textAnchor="end" fontSize="10" fill="#787774">{fmt(hi)}</text>
-      <text x={P.l - 4} y={H - P.b} textAnchor="end" fontSize="10" fill="#787774">{fmt(lo)}</text>
-      <text x={P.l} y={H - 8} fontSize="10" fill="#787774">{points[0].date.slice(5)}</text>
-      <text x={W - P.r} y={H - 8} textAnchor="end" fontSize="10" fill="#787774">{points[points.length - 1].date.slice(5)}</text>
-      <path d={d} fill="none" stroke="#2383e2" strokeWidth="2" />
-      {points.map((p, i) => <circle key={p.date} cx={x(i)} cy={y(p.v)} r="4" fill="#2383e2" />)}
-    </svg>
+    <div>
+      <div className="readout" aria-live="polite">
+        <span className="sub">{longDate(cur.date)}</span>
+        <b>{fmt(cur.v)} <span className="unit">{metric.unit}</span></b>
+      </div>
+      <div className="chart-wrap">
+        <svg className="chart-axis" width={AXIS_W} height={H} aria-hidden="true">
+          {ticks.map((t, i) => (
+            <text key={i} x={AXIS_W - 6} y={y(t) + 4} textAnchor="end" className="chart-text">{fmt(t)}</text>
+          ))}
+        </svg>
+        <div className="chart-scroll" ref={scrollRef} tabIndex={0} role="group" aria-label={`${metric.label} chart. Scroll sideways to see earlier days.`}>
+          <svg width={innerW} height={H} role="img" aria-label={`${metric.label} over ${n} recorded ${n === 1 ? 'day' : 'days'}`}>
+            {ticks.map((t, i) => (
+              <line key={i} x1={0} x2={innerW} y1={y(t)} y2={y(t)} className="chart-grid" />
+            ))}
+            {n > 1 && <path d={path} className="chart-line" />}
+            {points.map((p, i) => {
+              const on = i === sel
+              return (
+                <g
+                  key={p.date}
+                  className="chart-pt"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${longDate(p.date)}: ${fmt(p.v)} ${metric.unit}`}
+                  aria-pressed={on}
+                  onClick={() => setSel(i)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSel(i) } }}
+                >
+                  <circle cx={x(i)} cy={y(p.v)} r={22} className="chart-hit" />
+                  <circle cx={x(i)} cy={y(p.v)} r={on ? 7 : 4.5} className={on ? 'chart-dot on' : 'chart-dot'} />
+                  {on && <text x={x(i)} y={y(p.v) - 14} textAnchor="middle" className="chart-val">{fmt(p.v)}</text>}
+                  <text x={x(i)} y={H - 12} textAnchor="middle" className={on ? 'chart-text chart-date on' : 'chart-text chart-date'}>{p.date.slice(5).replace('-', '/')}</text>
+                </g>
+              )
+            })}
+          </svg>
+        </div>
+      </div>
+      {n > 1 && innerW > viewW && <p className="sub" style={{ margin: '4px 0 0' }}>Swipe sideways to see earlier days.</p>}
+    </div>
   )
 }
 
@@ -58,12 +128,11 @@ export default function Progress({ data }: { data: AppData }) {
   const metrics = METRICS[ex.kind]
   const metric = metrics.find((m) => m.key === mKey) ?? metrics[0]
   const stats = statsFor(ex.id, data.workouts)
-  const points = stats.flatMap((s) => {
+  const points: Point[] = stats.flatMap((s) => {
     const v = metric.get(s)
     return v && v > 0 ? [{ date: s.date, v }] : []
   })
-  const fmt = metric.fmt ?? ((n: number) => String(Math.round(n * 10) / 10))
-  const best = points.length ? (metric.key === 'pace' ? Math.min(...points.map((p) => p.v)) : Math.max(...points.map((p) => p.v))) : null
+  const best = points.length ? Math.max(...points.map((p) => p.v)) : null
 
   return (
     <>
@@ -84,14 +153,8 @@ export default function Progress({ data }: { data: AppData }) {
       </div>
       <section className="card">
         <h2 style={{ marginTop: 0 }}>{ex.name}: {metric.label}</h2>
-        {best !== null && <p>Personal best: <b>{fmt(best)}{metric.unit}</b></p>}
-        <Chart points={points} metric={metric} />
-      </section>
-      <section className="card">
-        <h2 style={{ marginTop: 0 }}>Recent records</h2>
-        {points.slice().reverse().slice(0, 10).map((p) => (
-          <div key={p.date} className="row spread"><span>{p.date}</span><b>{fmt(p.v)}{metric.unit}</b></div>
-        ))}
+        {best !== null && <p style={{ margin: '0 0 8px' }}>Personal best: <b>{fmt(best)} {metric.unit}</b></p>}
+        {points.length === 0 ? <p className="sub">No data to show.</p> : <Chart key={`${ex.id}-${metric.key}`} points={points} metric={metric} />}
       </section>
     </>
   )

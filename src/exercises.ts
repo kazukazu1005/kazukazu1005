@@ -2,9 +2,8 @@ import type { Exercise, ExerciseKind } from './types'
 
 const w = (id: string, name: string, part: string): Exercise => ({ id, name, kind: 'weight', part })
 const b = (id: string, name: string, part: string): Exercise => ({ id, name, kind: 'bodyweight', part })
-const c = (id: string, name: string): Exercise => ({ id, name, kind: 'cardio', part: 'Cardio' })
 
-export const PARTS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Abs', 'Cardio'] as const
+export const PARTS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Abs'] as const
 
 export const PRESET_EXERCISES: Exercise[] = [
   w('bench-press', 'Bench press', 'Chest'),
@@ -33,13 +32,6 @@ export const PRESET_EXERCISES: Exercise[] = [
   b('crunch', 'Crunch', 'Abs'),
   b('leg-raise', 'Leg raise', 'Abs'),
   b('plank-reps', 'Ab wheel', 'Abs'),
-  c('running', 'Running'),
-  c('walking', 'Walking'),
-  c('cycling', 'Cycling'),
-  c('swimming', 'Swimming'),
-  c('rowing', 'Rowing'),
-  c('aero-bike', 'Stationary bike'),
-  c('jump-rope', 'Jump rope'),
 ]
 
 export function newCustomExercise(name: string, kind: ExerciseKind, part: string): Exercise {

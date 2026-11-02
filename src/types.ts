@@ -1,4 +1,4 @@
-export type ExerciseKind = 'weight' | 'bodyweight' | 'cardio'
+export type ExerciseKind = 'weight' | 'bodyweight'
 
 export interface Exercise {
   id: string
@@ -12,9 +12,6 @@ export interface SetRec {
   id: string
   weight?: number // kg
   reps?: number
-  durationMin?: number
-  distanceKm?: number
-  warmup?: boolean
 }
 
 export interface Entry {
@@ -29,10 +26,10 @@ export interface Workout {
   title: string
   note: string
   entries: Entry[]
-  /** 'friends' = shared with friends (needs sign-in). Missing = private. */
-  visibility?: 'private' | 'friends'
-  /** For 'friends' workouts: true once the latest version reached the server. */
+  /** True once the latest version of this workout is on the server (friends can see it). */
   synced?: boolean
+  /** True once a copy has ever been sent to the server, so deleting it must also delete the copy. */
+  everShared?: boolean
   createdAt: number
   updatedAt: number
 }
@@ -40,5 +37,4 @@ export interface Workout {
 export const KIND_LABEL: Record<ExerciseKind, string> = {
   weight: 'Weights (kg × reps)',
   bodyweight: 'Bodyweight (reps)',
-  cardio: 'Cardio (time, distance)',
 }

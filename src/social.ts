@@ -5,12 +5,12 @@ import { db } from './db'
 import { supabase } from './supabase'
 import type { Exercise, ExerciseKind, SetRec, Workout } from './types'
 
-export interface Profile { id: string; username: string; display_name: string }
+export interface Profile { id: string; username: string; display_name: string; avatar?: string | null; bio?: string }
 
 export interface SharedEntry { name: string; kind: ExerciseKind; part: string; sets: SetRec[]; prs: string[] }
 export interface SharedPayload { entries: SharedEntry[] }
 
-export interface FeedComment { id: string; user_id: string; body: string; created_at: string; profiles: { username: string } | null }
+export interface FeedComment { id: string; user_id: string; body: string; created_at: string; profiles: { username: string; avatar?: string | null } | null }
 export interface FeedItem {
   id: string
   user_id: string
@@ -18,8 +18,8 @@ export interface FeedItem {
   title: string
   note: string
   data: SharedPayload
-  profiles: { username: string; display_name: string } | null
-  reactions: { user_id: string }[]
+  profiles: { username: string; display_name: string; avatar?: string | null } | null
+  reactions: { user_id: string; emoji: string; profiles: { username: string } | null }[]
   comments: FeedComment[]
 }
 
@@ -40,7 +40,7 @@ export function useAuth() {
 
   const loadProfile = useCallback(async (s: Session | null) => {
     if (!supabase || !s) return setProfile(null)
-    const { data } = await supabase.from('profiles').select('id, username, display_name').eq('id', s.user.id).maybeSingle()
+    const { data } = await supabase.from('profiles').select('id, username, display_name, avatar, bio').eq('id', s.user.id).maybeSingle()
     setProfile(data as Profile | null)
   }, [])
 
@@ -78,9 +78,21 @@ export async function createProfile(username: string, displayName: string) {
   fail((await sb().rpc('create_profile', { p_username: username, p_display_name: displayName })).error)
 }
 
+export async function updateProfile(userId: string, patch: { display_name: string; bio: string }) {
+  fail((await sb().from('profiles').update(patch).eq('id', userId)).error)
+}
+export async function fetchProfile(id: string): Promise<Profile | null> {
+  const { data, error } = await sb().from('profiles').select('id, username, display_name, avatar, bio').eq('id', id).maybeSingle()
+  fail(error)
+  return data as Profile | null
+}
+export async function updateAvatar(userId: string, avatar: string | null) {
+  fail((await sb().from('profiles').update({ avatar }).eq('id', userId)).error)
+}
+
 // ---------- friends ----------
 export async function fetchFriends(myId: string): Promise<Profile[]> {
-  const { data, error } = await sb().from('profiles').select('id, username, display_name').neq('id', myId).order('username')
+  const { data, error } = await sb().from('profiles').select('id, username, display_name, avatar, bio').neq('id', myId).order('username')
   fail(error)
   return (data ?? []) as Profile[]
 }
@@ -127,14 +139,14 @@ export async function removeShared(id: string) {
   fail((await sb().from('shared_workouts').delete().eq('id', id)).error)
 }
 
-/** Push 'friends' workouts that haven't reached the server yet (e.g. saved offline). */
+/** Push workouts that haven't reached the server yet (saved offline or before signing in). */
 export async function syncPending(userId: string, workouts: Workout[], exercises: Map<string, Exercise>): Promise<number> {
   let n = 0
   for (const w of workouts) {
-    if (w.visibility !== 'friends' || w.synced) continue
+    if (w.synced) continue
     try {
       await pushWorkout(userId, w, buildPayload(w, exercises, workouts))
-      await db.workouts.update(w.id, { synced: true })
+      await db.workouts.update(w.id, { synced: true, everShared: true })
       n++
     } catch {
       break // offline or signed out; try again later
@@ -145,7 +157,7 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
 
 // ---------- feed ----------
 const FEED_SELECT =
-  'id, user_id, date, title, note, data, profiles(username, display_name), reactions(user_id), comments(id, user_id, body, created_at, profiles(username))'
+  'id, user_id, date, title, note, data, profiles(username, display_name, avatar), reactions(user_id, emoji, profiles(username)), comments(id, user_id, body, created_at, profiles(username, avatar))'
 
 export async function fetchFeed(): Promise<FeedItem[]> {
   const { data, error } = await sb()
@@ -172,9 +184,14 @@ export async function fetchFriendLog(friendId: string): Promise<FeedItem[]> {
   fail(error)
   return (data ?? []) as unknown as FeedItem[]
 }
-export async function setLike(workoutId: string, userId: string, on: boolean) {
+export async function setReaction(workoutId: string, userId: string, emoji: string, on: boolean) {
   const q = sb().from('reactions')
-  fail((on ? await q.insert({ workout_id: workoutId, user_id: userId }) : await q.delete().eq('workout_id', workoutId).eq('user_id', userId)).error)
+  fail(
+    (on
+      ? await q.insert({ workout_id: workoutId, user_id: userId, emoji })
+      : await q.delete().eq('workout_id', workoutId).eq('user_id', userId).eq('emoji', emoji)
+    ).error,
+  )
 }
 export async function addComment(workoutId: string, userId: string, body: string) {
   fail((await sb().from('comments').insert({ workout_id: workoutId, user_id: userId, body })).error)

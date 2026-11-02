@@ -9,6 +9,15 @@ create table if not exists public.profiles (
   display_name text not null default '' check (char_length(display_name) <= 40),
   created_at timestamptz not null default now()
 );
+-- Profile photo: a small (<= ~50 KB) JPEG data URL made in the browser.
+alter table public.profiles add column if not exists avatar text;
+-- Short self introduction shown to friends.
+alter table public.profiles add column if not exists bio text not null default '';
+alter table public.profiles drop constraint if exists profiles_bio_check;
+alter table public.profiles add constraint profiles_bio_check check (char_length(bio) <= 160);
+alter table public.profiles drop constraint if exists profiles_avatar_check;
+alter table public.profiles add constraint profiles_avatar_check
+  check (avatar is null or (avatar like 'data:image/jpeg;base64,%' and char_length(avatar) <= 60000));
 
 -- Invite codes are private to their owner (separate table so friends can't read them).
 create table if not exists public.invite_codes (
@@ -41,12 +50,20 @@ create table if not exists public.shared_workouts (
 create index if not exists shared_workouts_user_date_idx on public.shared_workouts (user_id, date desc);
 create index if not exists shared_workouts_date_idx on public.shared_workouts (date desc);
 
+-- Teams-style reactions: a user can add several different emoji to one workout.
 create table if not exists public.reactions (
   workout_id uuid not null references public.shared_workouts(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
+  emoji text not null default '👍',
   created_at timestamptz not null default now(),
-  primary key (workout_id, user_id)
+  primary key (workout_id, user_id, emoji)
 );
+-- Upgrade path for databases created with the older one-like-per-user layout.
+alter table public.reactions add column if not exists emoji text not null default '👍';
+alter table public.reactions drop constraint if exists reactions_pkey;
+alter table public.reactions add primary key (workout_id, user_id, emoji);
+alter table public.reactions drop constraint if exists reactions_emoji_check;
+alter table public.reactions add constraint reactions_emoji_check check (emoji in ('👍', '❤️', '😂', '😮', '😢', '💪', '🔥'));
 
 create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),

@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react'
 import type { Route } from '../App'
 import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
-import { describeSet } from '../format'
+import { describeSet, fmtKg, setRM } from '../format'
 import { toDateStr, weekStart, weekStreak, workoutVolume } from '../calc'
 
-export default function Home({ data, go }: { data: AppData; go: (r: Route) => void }) {
+export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Route) => void; signedIn: boolean }) {
   const todayStr = toDateStr(new Date())
   const [selected, setSelected] = useState(todayStr)
 
@@ -15,25 +15,12 @@ export default function Home({ data, go }: { data: AppData; go: (r: Route) => vo
     return m
   }, [data.workouts])
 
-  const marks = (date: string) => {
-    let strength = false
-    let cardio = false
-    const ws = byDate.get(date) ?? []
-    for (const w of ws)
-      for (const e of w.entries) {
-        if (data.exercises.get(e.exerciseId)?.kind === 'cardio') cardio = true
-        else strength = true
-      }
-    return { strength, cardio, count: ws.length }
-  }
+  const marks = (date: string) => ({ count: byDate.get(date)?.length ?? 0 })
 
   const ws = toDateStr(weekStart(new Date()))
   const thisWeek = data.workouts.filter((w) => w.date >= ws)
   const volume = thisWeek.reduce((a, w) => a + workoutVolume(w, data.exercises), 0)
-  let km = 0
-  for (const w of thisWeek)
-    for (const e of w.entries)
-      if (data.exercises.get(e.exerciseId)?.kind === 'cardio') for (const s of e.sets) km += s.distanceKm ?? 0
+  const setsThisWeek = thisWeek.reduce((a, w) => a + w.entries.reduce((n, e) => n + e.sets.length, 0), 0)
 
   const dayWorkouts = byDate.get(selected) ?? []
   const selLabel = new Date(selected + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
@@ -49,7 +36,7 @@ export default function Home({ data, go }: { data: AppData; go: (r: Route) => vo
           <div className="row spread">
             <h3>{w.title || 'Workout'}</h3>
             <span className="row">
-              {w.visibility === 'friends' && <span className={`badge${w.synced ? '' : ' plain'}`}>{w.synced ? 'Shared' : 'Share pending'}</span>}
+              {signedIn && <span className={`badge${w.synced ? '' : ' plain'}`}>{w.synced ? 'Shared' : 'Share pending'}</span>}
               <button className="btn secondary small" onClick={() => go({ name: 'edit', id: w.id })}>Edit</button>
             </span>
           </div>
@@ -65,7 +52,7 @@ export default function Home({ data, go }: { data: AppData; go: (r: Route) => vo
                   {e.sets.map((st) => (
                     <li key={st.id}>
                       {ex ? describeSet(st, ex.kind) : ''}
-                      {st.warmup && <span className="sub"> (warm-up)</span>}
+                      {ex?.kind === 'weight' && setRM(st) !== null && <span className="sub"> · 1RM {fmtKg(setRM(st)!)}</span>}
                     </li>
                   ))}
                 </ol>
@@ -86,7 +73,7 @@ export default function Home({ data, go }: { data: AppData; go: (r: Route) => vo
           <div className="stat"><span className="sub">Workouts</span><b>{thisWeek.length}</b></div>
           <div className="stat"><span className="sub">Week streak</span><b>{weekStreak(data.workouts)}</b></div>
           <div className="stat"><span className="sub">Volume</span><b>{Math.round(volume).toLocaleString()} kg</b></div>
-          <div className="stat"><span className="sub">Cardio</span><b>{km.toFixed(1)} km</b></div>
+          <div className="stat"><span className="sub">Sets</span><b>{setsThisWeek}</b></div>
         </div>
       </section>
     </>

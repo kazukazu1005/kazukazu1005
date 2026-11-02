@@ -7,29 +7,21 @@ export function estimate1RM(weight: number, reps: number): number {
   return weight * (1 + reps / 30)
 }
 
+/** A set counts only when something was entered (new sets start empty). */
+export function isFilledSet(s: SetRec): boolean {
+  return (s.weight ?? 0) > 0 || (s.reps ?? 0) > 0
+}
+
 export function setVolume(s: SetRec): number {
   return (s.weight ?? 0) * (s.reps ?? 0)
 }
 
 export function entryVolume(e: Entry): number {
-  return e.sets.filter((s) => !s.warmup).reduce((a, s) => a + setVolume(s), 0)
+  return e.sets.reduce((a, s) => a + setVolume(s), 0)
 }
 
 export function workoutVolume(w: Workout, exercises: Map<string, Exercise>): number {
   return w.entries.reduce((a, e) => (exercises.get(e.exerciseId)?.kind === 'weight' ? a + entryVolume(e) : a), 0)
-}
-
-/** ペース（分/km）。距離か時間が無ければ null。 */
-export function pace(durationMin?: number, distanceKm?: number): number | null {
-  if (!durationMin || !distanceKm || durationMin <= 0 || distanceKm <= 0) return null
-  return durationMin / distanceKm
-}
-
-export function formatPace(p: number | null): string {
-  if (p === null) return '-'
-  const m = Math.floor(p)
-  const s = Math.round((p - m) * 60)
-  return s === 60 ? `${m + 1}:00` : `${m}:${String(s).padStart(2, '0')}`
 }
 
 export interface ExerciseStat {
@@ -38,9 +30,7 @@ export interface ExerciseStat {
   best1RM: number
   volume: number
   maxReps: number
-  distance: number
-  duration: number
-  bestPace: number | null
+  totalReps: number
 }
 
 /** ワークアウト履歴から、指定種目の日別統計を作る（日付昇順）。 */
@@ -49,19 +39,13 @@ export function statsFor(exerciseId: string, workouts: Workout[]): ExerciseStat[
   for (const w of workouts) {
     for (const e of w.entries) {
       if (e.exerciseId !== exerciseId) continue
-      const st =
-        byDate.get(w.date) ??
-        { date: w.date, maxWeight: 0, best1RM: 0, volume: 0, maxReps: 0, distance: 0, duration: 0, bestPace: null }
+      const st = byDate.get(w.date) ?? { date: w.date, maxWeight: 0, best1RM: 0, volume: 0, maxReps: 0, totalReps: 0 }
       for (const s of e.sets) {
-        if (s.warmup) continue
         st.maxWeight = Math.max(st.maxWeight, s.weight ?? 0)
         st.best1RM = Math.max(st.best1RM, estimate1RM(s.weight ?? 0, s.reps ?? 0))
         st.volume += setVolume(s)
         st.maxReps = Math.max(st.maxReps, s.reps ?? 0)
-        st.distance += s.distanceKm ?? 0
-        st.duration += s.durationMin ?? 0
-        const p = pace(s.durationMin, s.distanceKm)
-        if (p !== null && (st.bestPace === null || p < st.bestPace)) st.bestPace = p
+        st.totalReps += s.reps ?? 0
       }
       byDate.set(w.date, st)
     }
@@ -69,7 +53,7 @@ export function statsFor(exerciseId: string, workouts: Workout[]): ExerciseStat[
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
-export type PRType = 'Est. 1RM' | 'Max weight' | 'Max reps' | 'Longest distance' | 'Best pace'
+export type PRType = 'Est. 1RM' | 'Max weight' | 'Max reps'
 
 /**
  * 指定ワークアウトの指定種目で更新された自己ベストを返す。
@@ -79,7 +63,7 @@ export function detectPRs(entry: Entry, exercise: Exercise, date: string, workou
   const past = statsFor(
     exercise.id,
     workouts.filter((w) => w.id !== selfId && w.date <= date),
-  ).filter((s) => s.date <= date)
+  )
   if (past.length === 0) return []
   const now = statsFor(exercise.id, [{ id: 'x', date, title: '', note: '', entries: [entry], createdAt: 0, updatedAt: 0 }])[0]
   if (!now) return []
@@ -88,12 +72,8 @@ export function detectPRs(entry: Entry, exercise: Exercise, date: string, workou
   if (exercise.kind === 'weight') {
     if (now.best1RM > max((s) => s.best1RM)) prs.push('Est. 1RM')
     if (now.maxWeight > max((s) => s.maxWeight)) prs.push('Max weight')
-  } else if (exercise.kind === 'bodyweight') {
-    if (now.maxReps > max((s) => s.maxReps)) prs.push('Max reps')
-  } else {
-    if (now.distance > max((s) => s.distance)) prs.push('Longest distance')
-    const paces = past.map((s) => s.bestPace).filter((p): p is number => p !== null)
-    if (now.bestPace !== null && paces.length > 0 && now.bestPace < Math.min(...paces)) prs.push('Best pace')
+  } else if (now.maxReps > max((s) => s.maxReps)) {
+    prs.push('Max reps')
   }
   return prs
 }
