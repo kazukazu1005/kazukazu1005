@@ -6,8 +6,11 @@ import Editor from './screens/Editor'
 import Progress from './screens/Progress'
 import Settings from './screens/Settings'
 import Social from './screens/Social'
+import Profile from './screens/Profile'
+import Avatar from './components/Avatar'
+import { sharingConfigured } from './supabase'
 
-export type Route = { name: 'home' } | { name: 'edit'; id?: string; date?: string } | { name: 'social' } | { name: 'progress' } | { name: 'settings' }
+export type Route = { name: 'home' } | { name: 'edit'; id?: string; date?: string } | { name: 'social' } | { name: 'progress' } | { name: 'settings' } | { name: 'profile' }
 export type Auth = ReturnType<typeof useAuth>
 
 export default function App() {
@@ -30,8 +33,13 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="top">
+      <header className="top row spread">
         <h1>Kintore Memo</h1>
+        {sharingConfigured && (
+          <button className="profile-btn" aria-label="Your profile" aria-current={route.name === 'profile' ? 'page' : undefined} onClick={() => setRoute({ name: 'profile' })}>
+            {auth.profile ? <Avatar profile={auth.profile} size={40} /> : <span className="avatar" style={{ width: 40, height: 40, fontSize: 18 }} aria-hidden="true">＋</span>}
+          </button>
+        )}
       </header>
       <main>
         {!data.ready ? (
@@ -41,7 +49,9 @@ export default function App() {
         ) : route.name === 'edit' ? (
           <Editor key={(route.id ?? 'new') + (route.date ?? '')} data={data} auth={auth} id={route.id} date={route.date} go={setRoute} />
         ) : route.name === 'social' ? (
-          <Social data={data} auth={auth} />
+          <Social data={data} auth={auth} onEditProfile={() => setRoute({ name: 'profile' })} />
+        ) : route.name === 'profile' ? (
+          <Profile data={data} auth={auth} />
         ) : route.name === 'progress' ? (
           <Progress data={data} />
         ) : (

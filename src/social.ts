@@ -5,7 +5,7 @@ import { db } from './db'
 import { supabase } from './supabase'
 import type { Exercise, ExerciseKind, SetRec, Workout } from './types'
 
-export interface Profile { id: string; username: string; display_name: string; avatar?: string | null }
+export interface Profile { id: string; username: string; display_name: string; avatar?: string | null; bio?: string }
 
 export interface SharedEntry { name: string; kind: ExerciseKind; part: string; sets: SetRec[]; prs: string[] }
 export interface SharedPayload { entries: SharedEntry[] }
@@ -40,7 +40,7 @@ export function useAuth() {
 
   const loadProfile = useCallback(async (s: Session | null) => {
     if (!supabase || !s) return setProfile(null)
-    const { data } = await supabase.from('profiles').select('id, username, display_name, avatar').eq('id', s.user.id).maybeSingle()
+    const { data } = await supabase.from('profiles').select('id, username, display_name, avatar, bio').eq('id', s.user.id).maybeSingle()
     setProfile(data as Profile | null)
   }, [])
 
@@ -78,13 +78,21 @@ export async function createProfile(username: string, displayName: string) {
   fail((await sb().rpc('create_profile', { p_username: username, p_display_name: displayName })).error)
 }
 
+export async function updateProfile(userId: string, patch: { display_name: string; bio: string }) {
+  fail((await sb().from('profiles').update(patch).eq('id', userId)).error)
+}
+export async function fetchProfile(id: string): Promise<Profile | null> {
+  const { data, error } = await sb().from('profiles').select('id, username, display_name, avatar, bio').eq('id', id).maybeSingle()
+  fail(error)
+  return data as Profile | null
+}
 export async function updateAvatar(userId: string, avatar: string | null) {
   fail((await sb().from('profiles').update({ avatar }).eq('id', userId)).error)
 }
 
 // ---------- friends ----------
 export async function fetchFriends(myId: string): Promise<Profile[]> {
-  const { data, error } = await sb().from('profiles').select('id, username, display_name, avatar').neq('id', myId).order('username')
+  const { data, error } = await sb().from('profiles').select('id, username, display_name, avatar, bio').neq('id', myId).order('username')
   fail(error)
   return (data ?? []) as Profile[]
 }

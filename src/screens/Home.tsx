@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Route } from '../App'
 import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
-import { describeSet } from '../format'
+import { describeSet, fmtKg, setRM } from '../format'
 import { toDateStr, weekStart, weekStreak, workoutVolume } from '../calc'
 
 export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Route) => void; signedIn: boolean }) {
@@ -52,6 +52,7 @@ export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Ro
                   {e.sets.map((st) => (
                     <li key={st.id}>
                       {ex ? describeSet(st, ex.kind) : ''}
+                      {ex?.kind === 'weight' && setRM(st) !== null && <span className="sub"> · 1RM {fmtKg(setRM(st)!)}</span>}
                     </li>
                   ))}
                 </ol>

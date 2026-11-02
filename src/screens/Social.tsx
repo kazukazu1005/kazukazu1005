@@ -5,17 +5,16 @@ import Calendar from '../components/Calendar'
 import Avatar from '../components/Avatar'
 import RefreshButton from '../components/RefreshButton'
 import SharedCard from '../components/SharedCard'
-import { fileToAvatar } from '../avatar'
 import { toDateStr } from '../calc'
 import {
-  addFriend, createProfile, fetchFeed, fetchFriendLog, fetchFriends, fetchMyCode, regenerateCode, removeFriend,
-  signIn, signOut, signUp, updateAvatar, type FeedItem, type Profile,
+  addFriend, createProfile, fetchFeed, fetchFriendLog, fetchFriends, fetchProfile, fetchMyCode, regenerateCode, removeFriend,
+  signIn, signOut, signUp, type FeedItem, type Profile,
 } from '../social'
 import { sharingConfigured } from '../supabase'
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.')
 
-export default function Social({ data, auth }: { data: AppData; auth: Auth }) {
+export default function Social({ data, auth, onEditProfile }: { data: AppData; auth: Auth; onEditProfile: () => void }) {
   if (!sharingConfigured)
     return (
       <section className="card">
@@ -26,10 +25,10 @@ export default function Social({ data, auth }: { data: AppData; auth: Auth }) {
   if (auth.loading) return <p>Loading…</p>
   if (!auth.session) return <AuthForm />
   if (!auth.profile) return <ProfileForm onDone={auth.refresh} />
-  return <SignedIn data={data} auth={auth} me={auth.profile} />
+  return <SignedIn data={data} auth={auth} me={auth.profile} onEditProfile={onEditProfile} />
 }
 
-function AuthForm() {
+export function AuthForm() {
   const [mode, setMode] = useState<'in' | 'up'>('in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -72,7 +71,7 @@ function AuthForm() {
   )
 }
 
-function ProfileForm({ onDone }: { onDone: () => Promise<void> }) {
+export function ProfileForm({ onDone }: { onDone: () => Promise<void> }) {
   const [username, setUsername] = useState('')
   const [display, setDisplay] = useState('')
   const [error, setError] = useState('')
@@ -104,7 +103,7 @@ function ProfileForm({ onDone }: { onDone: () => Promise<void> }) {
   )
 }
 
-function SignedIn({ data, auth, me }: { data: AppData; auth: Auth; me: Profile }) {
+function SignedIn({ data, auth, me, onEditProfile }: { data: AppData; auth: Auth; me: Profile; onEditProfile: () => void }) {
   const [tab, setTab] = useState<'feed' | 'friends'>('feed')
   const [viewing, setViewing] = useState<Profile | null>(null)
   if (viewing) return <FriendLog me={me} friend={viewing} onBack={() => setViewing(null)} />
@@ -114,7 +113,7 @@ function SignedIn({ data, auth, me }: { data: AppData; auth: Auth; me: Profile }
         <button className="chip" aria-pressed={tab === 'feed'} onClick={() => setTab('feed')}>Feed</button>
         <button className="chip" aria-pressed={tab === 'friends'} onClick={() => setTab('friends')}>Friends & account</button>
       </div>
-      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} /> : <Friends me={me} auth={auth} onOpen={setViewing} />}
+      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} /> : <Friends me={me} auth={auth} onOpen={setViewing} onEditProfile={onEditProfile} />}
     </>
   )
 }
@@ -154,9 +153,12 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
   const [items, setItems] = useState<FeedItem[] | null>(null)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(toDateStr(new Date()))
+  const [full, setFull] = useState<Profile>(friend)
   const load = useCallback(async () => {
     try {
-      setItems(await fetchFriendLog(friend.id))
+      const [list, prof] = await Promise.all([fetchFriendLog(friend.id), fetchProfile(friend.id)])
+      if (prof) setFull(prof)
+      setItems(list)
       setError('')
     } catch (e) {
       setError(errText(e))
@@ -183,7 +185,8 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
         <button className="btn secondary small" onClick={onBack}>‹ Back</button>
         <RefreshButton onRefresh={load} />
       </div>
-      <h2 className="who" style={{ marginTop: 12 }}><Avatar profile={friend} size={48} /><span>{name} <span className="sub">@{friend.username}</span></span></h2>
+      <h2 className="who" style={{ marginTop: 12 }}><Avatar profile={full} size={48} /><span>{name} <span className="sub">@{friend.username}</span></span></h2>
+      {full.bio && <p style={{ margin: '0 0 4px', whiteSpace: 'pre-wrap' }}>{full.bio}</p>}
       {error && <div role="alert" className="msg">{error}</div>}
       {items === null && !error && <p>Loading…</p>}
       {items && (
@@ -199,7 +202,7 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
   )
 }
 
-function Friends({ me, auth, onOpen }: { me: Profile; auth: Auth; onOpen: (p: Profile) => void }) {
+function Friends({ me, auth, onOpen, onEditProfile }: { me: Profile; auth: Auth; onOpen: (p: Profile) => void; onEditProfile: () => void }) {
   const [friends, setFriends] = useState<Profile[]>([])
   const [code, setCode] = useState('')
   const [input, setInput] = useState('')
@@ -259,36 +262,14 @@ function Friends({ me, auth, onOpen }: { me: Profile; auth: Auth; onOpen: (p: Pr
       </section>
 
       <section className="card">
-        <h2 style={{ marginTop: 0 }}>Profile</h2>
-        <div className="row" style={{ gap: 16 }}>
-          <Avatar profile={me} size={72} />
-          <div>
-            <div style={{ fontWeight: 600 }}>{me.display_name || me.username}</div>
-            <div className="sub">@{me.username} · {auth.session?.user.email}</div>
-          </div>
+        <h2 style={{ marginTop: 0 }}>Account</h2>
+        <div className="row spread">
+          <span className="who"><Avatar profile={me} size={40} /><span>@{me.username}<br /><span className="sub">{auth.session?.user.email}</span></span></span>
         </div>
         <div className="row" style={{ marginTop: 12 }}>
-          <label className="btn secondary small file-btn" style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
-            {me.avatar ? 'Change photo' : 'Add photo'}
-            <input
-              className="visually-hidden"
-              type="file"
-              accept="image/*"
-              onChange={async (e) => {
-                const f = e.target.files?.[0]
-                e.target.value = ''
-                if (!f) return
-                await run(async () => { await updateAvatar(me.id, await fileToAvatar(f)); await auth.refresh() }, 'Photo updated.')
-              }}
-            />
-          </label>
-          {me.avatar && <button className="btn danger small" onClick={() => run(async () => { await updateAvatar(me.id, null); await auth.refresh() }, 'Photo removed.')}>Remove photo</button>}
+          <button className="btn secondary" onClick={onEditProfile}>Edit profile</button>
+          <button className="btn secondary" onClick={() => run(signOut, 'Signed out.')}>Sign out</button>
         </div>
-      </section>
-
-      <section className="card">
-        <h2 style={{ marginTop: 0 }}>Account</h2>
-        <button className="btn secondary" onClick={() => run(signOut, 'Signed out.')}>Sign out</button>
       </section>
     </>
   )

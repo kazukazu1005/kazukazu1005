@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Avatar from './Avatar'
+import { fmtKg, setRM } from '../format'
 import { REACTIONS } from '../reactions'
 import type { FeedItem, Profile, SharedEntry } from '../social'
 import { addComment, deleteComment, setReaction } from '../social'
@@ -12,7 +13,10 @@ export function describeShared(e: SharedEntry): string {
 /** Per-set line for a shared entry. */
 function setLine(e: SharedEntry, i: number): string {
   const s = e.sets[i]
-  if (e.kind === 'weight') return `${s.weight ?? 0} kg × ${s.reps ?? 0}`
+  if (e.kind === 'weight') {
+    const rm = setRM(s)
+    return `${s.weight ?? 0} kg × ${s.reps ?? 0}${rm === null ? '' : ` · 1RM ${fmtKg(rm)}`}`
+  }
   return `${s.reps ?? 0} reps`
 }
 

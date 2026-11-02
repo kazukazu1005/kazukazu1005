@@ -4,7 +4,7 @@ import type { AppData } from '../data'
 import { db, uid } from '../db'
 import { detectPRs, isFilledSet, toDateStr } from '../calc'
 import { PARTS, newCustomExercise } from '../exercises'
-import { describeSet } from '../format'
+import { describeSet, fmtKg, setRM } from '../format'
 import { buildPayload, pushWorkout, removeShared } from '../social'
 import { sharingConfigured } from '../supabase'
 import { KIND_LABEL, type Entry, type Exercise, type ExerciseKind, type SetRec, type Workout } from '../types'
@@ -133,8 +133,14 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
                   )}
                   <button className="btn danger small" aria-label={`Delete set ${i + 1}`} onClick={() => patchEntry(e.id, (x) => ({ ...x, sets: x.sets.filter((y) => y.id !== s.id) }))}>Delete</button>
                 </div>
+                {ex.kind === 'weight' && setRM(s) !== null && (
+                  <div className="rm" aria-live="polite">Est. 1RM <b>{fmtKg(setRM(s)!)} kg</b></div>
+                )}
               </div>
             ))}
+            {ex.kind === 'weight' && e.sets.some((x) => setRM(x) !== null) && (
+              <p className="rm-best">Best est. 1RM today: <b>{fmtKg(Math.max(...e.sets.map((x) => setRM(x) ?? 0)))} kg</b> <span className="sub">(weight × (1 + reps ÷ 30))</span></p>
+            )}
             <button className="btn secondary block" onClick={() => addSet(e)}>Add set</button>
           </section>
         )
