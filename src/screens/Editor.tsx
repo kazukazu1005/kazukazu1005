@@ -1,15 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Auth, Route } from '../App'
 import type { AppData } from '../data'
 import { db, uid } from '../db'
 import { detectPRs, isFilledSet, toDateStr } from '../calc'
 import { PARTS, newCustomExercise } from '../exercises'
+import { clearDraft, hasContent, loadDraft, saveDraft } from '../draft'
+import { fillFromPrevious, retargetEntry } from '../entryOps'
 import { describeSet, fmtKg, setRM } from '../format'
 import { buildPayload, pushWorkout, removeShared } from '../social'
 import { sharingConfigured } from '../supabase'
 import { KIND_LABEL, type Entry, type Exercise, type ExerciseKind, type SetRec, type Workout } from '../types'
 
 const num = (v: string): number | undefined => (v === '' || isNaN(Number(v)) || Number(v) < 0 ? undefined : Number(v))
+
+/** Last time's values for set number i (falls back to its last set), shown faintly in empty boxes. */
+function hint(prev: { sets: SetRec[] } | null, i: number): SetRec | undefined {
+  return prev ? prev.sets[i] ?? prev.sets[prev.sets.length - 1] : undefined
+}
 
 function lastRecord(data: AppData, exerciseId: string, date: string, selfId: string): { date: string; sets: SetRec[] } | null {
   for (const w of data.workouts) {
@@ -22,22 +29,59 @@ function lastRecord(data: AppData, exerciseId: string, date: string, selfId: str
 
 export default function Editor({ data, auth, id, date, go }: { data: AppData; auth: Auth; id?: string; date?: string; go: (r: Route) => void }) {
   const existing = id ? data.workouts.find((w) => w.id === id) : undefined
-  const [w, setW] = useState<Workout>(
-    () =>
-      existing ?? { id: uid(), date: date ?? toDateStr(new Date()), title: '', note: '', entries: [], createdAt: Date.now(), updatedAt: Date.now() },
-  )
-  const [picker, setPicker] = useState(false)
+  const draftKey = id ?? 'new'
+  const fresh = (): Workout => ({ id: uid(), date: date ?? toDateStr(new Date()), title: '', note: '', entries: [], createdAt: Date.now(), updatedAt: Date.now() })
+
+  // Unsaved input is kept on this device; reopen the screen and it comes back.
+  const [start] = useState(() => {
+    const d = loadDraft(draftKey)
+    if (d && (!existing || existing.updatedAt <= d.base)) return { w: d.w, restored: true }
+    if (d) clearDraft(draftKey) // the workout changed since this draft was made
+    return { w: existing ?? fresh(), restored: false }
+  })
+  const [w, setW] = useState<Workout>(start.w)
+  const [restored, setRestored] = useState(start.restored)
+  const [picker, setPicker] = useState<{ entryId?: string } | null>(null)
   const [error, setError] = useState('')
+
+  const latest = useRef(w)
+  latest.current = w
+  const finished = useRef(false) // saved, deleted or discarded: stop keeping a draft
+  const persist = (x: Workout) => {
+    if (finished.current) return
+    const changed = existing ? JSON.stringify(x) !== JSON.stringify(existing) : hasContent(x)
+    if (changed) saveDraft(draftKey, x, existing?.updatedAt ?? 0)
+    else clearDraft(draftKey)
+  }
+  useEffect(() => {
+    const t = setTimeout(() => persist(w), 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w])
+  useEffect(() => () => persist(latest.current), []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const discardDraft = () => {
+    finished.current = true
+    clearDraft(draftKey)
+    setW(existing ?? fresh())
+    setRestored(false)
+    setTimeout(() => { finished.current = false }, 0)
+  }
 
   const patchEntry = (eid: string, f: (e: Entry) => Entry) => setW({ ...w, entries: w.entries.map((e) => (e.id === eid ? f(e) : e)) })
   const patchSet = (eid: string, sid: string, p: Partial<SetRec>) =>
     patchEntry(eid, (e) => ({ ...e, sets: e.sets.map((s) => (s.id === sid ? { ...s, ...p } : s)) }))
 
-  const addExercise = (ex: Exercise) => {
-    // A new exercise starts with 3 empty sets, ready to fill in.
-    const sets: SetRec[] = [{ id: uid() }, { id: uid() }, { id: uid() }]
-    setW({ ...w, entries: [...w.entries, { id: uid(), exerciseId: ex.id, sets }] })
-    setPicker(false)
+  const pickExercise = (ex: Exercise) => {
+    if (picker?.entryId) {
+      // Change which exercise an entry is for; its sets stay.
+      setW({ ...w, entries: w.entries.map((e) => (e.id === picker.entryId ? retargetEntry(e, ex) : e)) })
+    } else {
+      // A new exercise starts with 3 empty sets, ready to fill in.
+      const sets: SetRec[] = [{ id: uid() }, { id: uid() }, { id: uid() }]
+      setW({ ...w, entries: [...w.entries, { id: uid(), exerciseId: ex.id, sets }] })
+    }
+    setPicker(null)
   }
 
   const addSet = (e: Entry) => patchEntry(e.id, (x) => ({ ...x, sets: [...x.sets, { id: uid() }] }))
@@ -62,11 +106,15 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
         next.everShared = true
       } catch (e) {
         await db.workouts.put(next)
+        finished.current = true
+        clearDraft(draftKey)
         setW(next)
         return setError(`Saved on this device, but sharing failed (it will retry later): ${e instanceof Error ? e.message : 'unknown error'}`)
       }
     }
     await db.workouts.put(next)
+    finished.current = true
+    clearDraft(draftKey)
     go({ name: 'home' })
   }
 
@@ -82,12 +130,20 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
       }
     }
     await db.workouts.delete(w.id)
+    finished.current = true
+    clearDraft(draftKey)
     go({ name: 'home' })
   }
 
   return (
     <>
       <h2 style={{ marginTop: 0 }}>{existing ? 'Edit workout' : 'Log a workout'}</h2>
+      {restored && (
+        <div role="status" className="msg ok row spread">
+          <span>Restored your unsaved input.</span>
+          <button className="btn secondary small" onClick={discardDraft}>Discard</button>
+        </div>
+      )}
       {error && <div role="alert" className="msg">{error}</div>}
 
       <div className="row">
@@ -110,10 +166,18 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
           <section key={e.id} className="card" aria-label={ex.name}>
             <div className="row spread">
               <h3>{ex.name}</h3>
-              <button className="btn danger small" onClick={() => setW({ ...w, entries: w.entries.filter((x) => x.id !== e.id) })} aria-label={`Remove ${ex.name}`}>Remove</button>
+              <span className="row">
+                <button className="btn secondary small" onClick={() => setPicker({ entryId: e.id })} aria-label={`Change exercise for ${ex.name}`}>Change</button>
+                <button className="btn danger small" onClick={() => setW({ ...w, entries: w.entries.filter((x) => x.id !== e.id) })} aria-label={`Remove ${ex.name}`}>Remove</button>
+              </span>
             </div>
             {prs.length > 0 && <p style={{ margin: '4px 0' }}>{prs.map((p) => <span key={p} className="badge" style={{ marginRight: 4 }}>New PR: {p}</span>)}</p>}
-            {prev && <p className="sub">Last time ({prev.date}): {prev.sets.map((s) => describeSet(s, ex.kind)).join(' / ')}</p>}
+            {prev && (
+              <div className="row spread" style={{ margin: '4px 0 8px' }}>
+                <span className="sub">Last time ({prev.date}): {prev.sets.map((s) => describeSet(s, ex.kind)).join(' / ')}</span>
+                <button className="btn secondary small" onClick={() => patchEntry(e.id, (x) => ({ ...x, sets: fillFromPrevious(x.sets, prev.sets, uid) }))}>Fill with last time</button>
+              </div>
+            )}
 
             {e.sets.map((s, i) => (
               <div key={s.id}>
@@ -121,13 +185,13 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
                   <span className="num">{i + 1}</span>
                   {ex.kind === 'weight' && (
                     <>
-                      <div><label className="sub" htmlFor={`w${s.id}`}>Weight (kg)</label><input id={`w${s.id}`} type="number" inputMode="decimal" min="0" step="0.5" value={s.weight ?? ''} onChange={(ev) => patchSet(e.id, s.id, { weight: num(ev.target.value) })} /></div>
-                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
+                      <div><label className="sub" htmlFor={`w${s.id}`}>Weight (kg)</label><input id={`w${s.id}`} type="number" inputMode="decimal" min="0" step="0.5" value={s.weight ?? ''} placeholder={hint(prev, i)?.weight?.toString() ?? ''} onChange={(ev) => patchSet(e.id, s.id, { weight: num(ev.target.value) })} /></div>
+                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} placeholder={hint(prev, i)?.reps?.toString() ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
                     </>
                   )}
                   {ex.kind === 'bodyweight' && (
                     <>
-                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
+                      <div><label className="sub" htmlFor={`r${s.id}`}>Reps</label><input id={`r${s.id}`} type="number" inputMode="numeric" min="0" step="1" value={s.reps ?? ''} placeholder={hint(prev, i)?.reps?.toString() ?? ''} onChange={(ev) => patchSet(e.id, s.id, { reps: num(ev.target.value) })} /></div>
                       <div />
                     </>
                   )}
@@ -146,7 +210,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
         )
       })}
 
-      <button className="btn secondary block" onClick={() => setPicker(true)}>Add exercise</button>
+      <button className="btn secondary block" onClick={() => setPicker({})}>Add exercise</button>
 
       <div className="field-group" style={{ marginTop: 16 }}>
         <label className="field" htmlFor="note">Notes (optional)</label>
@@ -163,7 +227,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
         {existing && <button className="btn danger" onClick={remove}>Delete</button>}
       </div>
 
-      {picker && <Picker data={data} onPick={addExercise} onClose={() => setPicker(false)} />}
+      {picker && <Picker data={data} onPick={pickExercise} onClose={() => setPicker(null)} />}
     </>
   )
 }

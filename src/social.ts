@@ -160,14 +160,14 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
 const FEED_SELECT =
   'id, user_id, created_at, date, title, note, data, profiles(username, display_name, avatar), reactions(user_id, emoji, profiles(username)), comments(id, user_id, body, created_at, profiles(username, avatar))'
 
-export async function fetchFeed(): Promise<FeedItem[]> {
+export async function fetchFeed(limit: number): Promise<FeedItem[]> {
   const { data, error } = await sb()
     .from('shared_workouts')
     .select(FEED_SELECT)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
     .order('created_at', { referencedTable: 'comments', ascending: true })
-    .limit(50)
+    .limit(limit)
   fail(error)
   return (data ?? []) as unknown as FeedItem[]
 }

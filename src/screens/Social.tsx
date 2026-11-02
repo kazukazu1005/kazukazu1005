@@ -14,6 +14,7 @@ import {
 } from '../social'
 import { sharingConfigured } from '../supabase'
 
+const FEED_PAGE = 20
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.')
 
 export default function Social({ data, auth, seen, onSeen, onEditProfile }: { data: AppData; auth: Auth; seen: string | null; onSeen: (iso: string) => void; onEditProfile: () => void }) {
@@ -125,9 +126,10 @@ function Feed({ me, onOpen, seen, onSeen }: { me: Profile; data: AppData; onOpen
   const [error, setError] = useState('')
   // Posts newer than what you had seen when you opened the feed get a "New" mark.
   const baseline = useRef<number | null>(null)
+  const [limit, setLimit] = useState(FEED_PAGE)
   const load = useCallback(async () => {
     try {
-      const list = await fetchFeed()
+      const list = await fetchFeed(limit)
       if (baseline.current === null) baseline.current = seen === null ? Number.POSITIVE_INFINITY : Date.parse(seen)
       setItems(list)
       setError('')
@@ -137,7 +139,7 @@ function Feed({ me, onOpen, seen, onSeen }: { me: Profile; data: AppData; onOpen
       setError(errText(e))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me.id])
+  }, [me.id, limit])
   useEffect(() => { void load() }, [load])
 
   const act = async (f: () => Promise<void>) => {
@@ -155,6 +157,10 @@ function Feed({ me, onOpen, seen, onSeen }: { me: Profile; data: AppData; onOpen
       {items === null && !error && <p>Loading…</p>}
       {items?.length === 0 && <p className="sub">Nothing here yet. Add friends in the next tab; every workout you save is shared with them automatically.</p>}
       {items?.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} onOpenAuthor={onOpen} isNew={isNew(it)} />)}
+      {items && items.length >= limit && (
+        <button className="btn secondary block" onClick={() => setLimit(limit + FEED_PAGE)}>Load more</button>
+      )}
+      {items && items.length > 0 && items.length < limit && <p className="sub" style={{ textAlign: 'center' }}>You are all caught up.</p>}
     </>
   )
 }

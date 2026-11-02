@@ -3,11 +3,18 @@ import type { AppData } from '../data'
 import { db } from '../db'
 import { buildBackup, buildCsv, download, importBackup } from '../exportData'
 import { toDateStr } from '../calc'
+import { deleteCustomExercise, MAX_EXERCISE_NAME, renameCustomExercise, usageCount } from '../exerciseOps'
+import type { Exercise } from '../types'
 
 export default function Settings({ data }: { data: AppData }) {
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const today = toDateStr(new Date())
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
+
+  const run = async (f: () => Promise<unknown>, ok: string) => {
+    try { await f(); setMsg({ type: 'ok', text: ok }) } catch (e) { setMsg({ type: 'error', text: e instanceof Error ? e.message : 'Something went wrong.' }) }
+  }
 
   const onImport = async (f: File | undefined) => {
     if (!f) return
@@ -32,6 +39,48 @@ export default function Settings({ data }: { data: AppData }) {
   return (
     <>
       {msg && <div role={msg.type === 'error' ? 'alert' : 'status'} className={`msg ${msg.type === 'ok' ? 'ok' : ''}`}>{msg.text}</div>}
+      <section className="card">
+        <h2 style={{ marginTop: 0 }}>My exercises</h2>
+        {data.custom.length === 0 && <p className="sub">Exercises you create while logging show up here, where you can rename or delete them.</p>}
+        {data.custom.map((ex: Exercise) => {
+          const used = usageCount(data.workouts, ex.id)
+          const isEditing = editing?.id === ex.id
+          return (
+            <div key={ex.id} className="comment">
+              {isEditing ? (
+                <form
+                  className="row"
+                  onSubmit={(e) => { e.preventDefault(); void run(async () => { await renameCustomExercise(ex.id, editing.name); setEditing(null) }, 'Renamed.') }}
+                >
+                  <input type="text" className="grow" aria-label={`New name for ${ex.name}`} maxLength={MAX_EXERCISE_NAME} autoFocus value={editing.name} onChange={(e) => setEditing({ id: ex.id, name: e.target.value })} style={{ width: 'auto' }} />
+                  <button className="btn small" disabled={!editing.name.trim()}>Save</button>
+                  <button type="button" className="btn secondary small" onClick={() => setEditing(null)}>Cancel</button>
+                </form>
+              ) : (
+                <div className="row spread">
+                  <span>
+                    {ex.name} <span className="sub">{ex.part} · {used === 0 ? 'unused' : `${used} ${used === 1 ? 'workout' : 'workouts'}`}</span>
+                  </span>
+                  <span className="row">
+                    <button className="btn secondary small" onClick={() => setEditing({ id: ex.id, name: ex.name })}>Rename</button>
+                    <button
+                      className="btn danger small"
+                      disabled={used > 0}
+                      title={used > 0 ? 'Used in saved workouts. Change those first.' : undefined}
+                      onClick={() => confirm(`Delete “${ex.name}”?`) && run(() => deleteCustomExercise(ex.id), 'Deleted.')}
+                    >
+                      Delete
+                    </button>
+                  </span>
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {data.custom.some((ex) => usageCount(data.workouts, ex.id) > 0) && (
+          <p className="sub" style={{ marginBottom: 0 }}>An exercise used in saved workouts can be renamed but not deleted. Use “Change” on the exercise inside a workout to move its sets to another exercise first.</p>
+        )}
+      </section>
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Export</h2>
         <p className="sub">Your log lives in this browser. Save a backup now and then, especially before switching phones.</p>
