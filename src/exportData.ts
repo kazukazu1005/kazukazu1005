@@ -67,7 +67,7 @@ export function download(filename: string, content: string, mime: string) {
 export async function importBackup(text: string): Promise<number> {
   const { workouts, customExercises } = validateBackup(JSON.parse(text))
   await db.transaction('rw', db.workouts, db.customExercises, async () => {
-    await db.workouts.bulkPut(workouts)
+    await db.workouts.bulkPut(workouts.map((w) => ({ ...w, synced: false, everShared: undefined })))
     await db.customExercises.bulkPut(customExercises)
   })
   return workouts.length

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { formatPace, pace } from '../calc'
+import { REACTIONS } from '../reactions'
 import type { FeedItem, Profile, SharedEntry } from '../social'
-import { addComment, deleteComment, setLike } from '../social'
+import { addComment, deleteComment, setReaction } from '../social'
 
 export function describeShared(e: SharedEntry): string {
   const sets = e.sets.filter((s) => !s.warmup)
@@ -20,6 +21,47 @@ function setLine(e: SharedEntry, i: number): string {
   if (e.kind === 'bodyweight') return `${s.reps ?? 0} reps${w}`
   const p = pace(s.durationMin, s.distanceKm)
   return `${s.distanceKm ?? 0} km · ${s.durationMin ?? 0} min${p === null ? '' : ` · ${formatPace(p)}/km`}`
+}
+
+/** Teams-style reactions: one pill per emoji with a count, plus a "+" picker. */
+function ReactionBar({ it, me, act }: { it: FeedItem; me: Profile; act: (f: () => Promise<void>) => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const groups = REACTIONS.map((emoji) => {
+    const list = it.reactions.filter((r) => r.emoji === emoji)
+    return { emoji, count: list.length, mine: list.some((r) => r.user_id === me.id), names: list.map((r) => r.profiles?.username ?? 'user') }
+  })
+  const toggle = (emoji: string, mine: boolean) => {
+    setOpen(false)
+    return act(() => setReaction(it.id, me.id, emoji, !mine))
+  }
+  return (
+    <div className="reactions">
+      {groups.filter((g) => g.count > 0).map((g) => (
+        <button
+          key={g.emoji}
+          className="react-pill"
+          aria-pressed={g.mine}
+          title={g.names.join(', ')}
+          aria-label={`${g.emoji} ${g.count}: ${g.names.join(', ')}. ${g.mine ? 'Remove your reaction' : 'React'}`}
+          onClick={() => toggle(g.emoji, g.mine)}
+        >
+          <span aria-hidden="true">{g.emoji}</span> {g.count}
+        </button>
+      ))}
+      <span className="react-add">
+        <button className="react-pill" aria-expanded={open} aria-label="Add reaction" onClick={() => setOpen(!open)}>＋</button>
+        {open && (
+          <div className="react-picker" role="group" aria-label="Choose a reaction">
+            {groups.map((g) => (
+              <button key={g.emoji} className="react-opt" aria-pressed={g.mine} aria-label={`${g.emoji}${g.mine ? ' (selected)' : ''}`} onClick={() => toggle(g.emoji, g.mine)}>
+                {g.emoji}
+              </button>
+            ))}
+          </div>
+        )}
+      </span>
+    </div>
+  )
 }
 
 function CommentBox({ onSend }: { onSend: (body: string) => Promise<void> }) {
@@ -54,7 +96,6 @@ export default function SharedCard({
   detail?: boolean
   onOpenAuthor?: (p: Profile) => void
 }) {
-  const liked = it.reactions.some((r) => r.user_id === me.id)
   const author = it.profiles
   const name = author?.display_name || author?.username
   return (
@@ -85,11 +126,7 @@ export default function SharedCard({
         </div>
       ))}
       {it.note && <p className="sub" style={{ whiteSpace: 'pre-wrap' }}>{it.note}</p>}
-      <div className="row" style={{ marginTop: 8 }}>
-        <button className="btn secondary small" aria-pressed={liked} onClick={() => act(() => setLike(it.id, me.id, !liked))}>
-          {liked ? 'Liked' : 'Like'} · {it.reactions.length}
-        </button>
-      </div>
+      <ReactionBar it={it} me={me} act={act} />
       {it.comments.map((c) => (
         <div key={c.id} className="comment row spread">
           <span><b>{c.profiles?.username ?? 'user'}</b> {c.body}</span>

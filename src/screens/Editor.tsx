@@ -46,45 +46,35 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
   }
 
   const canShare = sharingConfigured && !!auth.session && !!auth.profile
-  const wasShared = existing?.visibility === 'friends'
 
   const save = async () => {
     setError('')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(w.date)) return setError('Please enter a date.')
     if (w.entries.length === 0) return setError('Add at least one exercise.')
-    const wantShare = w.visibility === 'friends'
 
-    // Stopping sharing must remove the server copy first, so nothing stays visible by mistake.
-    if (wasShared && !wantShare && sharingConfigured) {
-      try {
-        if (!auth.session) throw new Error('Sign in (Friends tab) to stop sharing this workout.')
-        await removeShared(w.id)
-      } catch (e) {
-        return setError(`Could not remove the shared copy: ${e instanceof Error ? e.message : 'unknown error'}`)
-      }
-    }
-
-    const next: Workout = { ...w, visibility: wantShare ? 'friends' : 'private', synced: false, updatedAt: Date.now() }
-    if (wantShare && canShare) {
+    // Every saved workout is shared with friends automatically (when signed in).
+    const next: Workout = { ...w, synced: false, updatedAt: Date.now() }
+    if (canShare) {
       try {
         await pushWorkout(auth.session!.user.id, next, buildPayload(next, data.exercises, data.workouts))
         next.synced = true
+        next.everShared = true
       } catch (e) {
         await db.workouts.put(next)
         setW(next)
         return setError(`Saved on this device, but sharing failed (it will retry later): ${e instanceof Error ? e.message : 'unknown error'}`)
       }
     }
-    if (!wantShare) next.synced = undefined
     await db.workouts.put(next)
     go({ name: 'home' })
   }
 
   const remove = async () => {
-    if (!confirm('Delete this workout? This cannot be undone.')) return
-    if (wasShared && sharingConfigured) {
+    if (!confirm('Delete this workout? Friends will no longer see it either. This cannot be undone.')) return
+    // The shared copy must be removed first so it never stays visible by mistake.
+    if (sharingConfigured && (w.everShared || auth.session)) {
       try {
-        if (!auth.session) throw new Error('Sign in (Friends tab) to delete a shared workout.')
+        if (!auth.session) throw new Error('Sign in (Friends tab) to delete a workout that was shared.')
         await removeShared(w.id)
       } catch (e) {
         return setError(`Could not remove the shared copy: ${e instanceof Error ? e.message : 'unknown error'}`)
@@ -164,26 +154,15 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
       <button className="btn secondary block" onClick={() => setPicker(true)}>Add exercise</button>
 
       <div className="field-group" style={{ marginTop: 16 }}>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={w.visibility === 'friends'}
-            disabled={!sharingConfigured}
-            onChange={(e) => setW({ ...w, visibility: e.target.checked ? 'friends' : 'private' })}
-          />
-          Share with friends
-        </label>
-        {!sharingConfigured && <div className="sub">Sharing is not set up in this build.</div>}
-        {sharingConfigured && w.visibility === 'friends' && !canShare && (
-          <div className="sub">Sign in on the Friends tab. It will be shared automatically afterwards.</div>
-        )}
-      </div>
-
-      <div className="field-group">
         <label className="field" htmlFor="note">Notes (optional)</label>
         <textarea id="note" value={w.note} onChange={(e) => setW({ ...w, note: e.target.value })} />
       </div>
 
+      {sharingConfigured && (
+        <p className="sub">
+          {canShare ? 'Saved workouts are shared with your friends automatically.' : 'Sign in on the Friends tab to share your workouts with friends. Past ones are sent once you sign in.'}
+        </p>
+      )}
       <div className="row" style={{ marginTop: 16 }}>
         <button className="btn grow" onClick={save}>Save</button>
         {existing && <button className="btn danger" onClick={remove}>Delete</button>}

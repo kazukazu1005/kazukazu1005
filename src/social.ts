@@ -19,7 +19,7 @@ export interface FeedItem {
   note: string
   data: SharedPayload
   profiles: { username: string; display_name: string } | null
-  reactions: { user_id: string }[]
+  reactions: { user_id: string; emoji: string; profiles: { username: string } | null }[]
   comments: FeedComment[]
 }
 
@@ -127,14 +127,14 @@ export async function removeShared(id: string) {
   fail((await sb().from('shared_workouts').delete().eq('id', id)).error)
 }
 
-/** Push 'friends' workouts that haven't reached the server yet (e.g. saved offline). */
+/** Push workouts that haven't reached the server yet (saved offline or before signing in). */
 export async function syncPending(userId: string, workouts: Workout[], exercises: Map<string, Exercise>): Promise<number> {
   let n = 0
   for (const w of workouts) {
-    if (w.visibility !== 'friends' || w.synced) continue
+    if (w.synced) continue
     try {
       await pushWorkout(userId, w, buildPayload(w, exercises, workouts))
-      await db.workouts.update(w.id, { synced: true })
+      await db.workouts.update(w.id, { synced: true, everShared: true })
       n++
     } catch {
       break // offline or signed out; try again later
@@ -145,7 +145,7 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
 
 // ---------- feed ----------
 const FEED_SELECT =
-  'id, user_id, date, title, note, data, profiles(username, display_name), reactions(user_id), comments(id, user_id, body, created_at, profiles(username))'
+  'id, user_id, date, title, note, data, profiles(username, display_name), reactions(user_id, emoji, profiles(username)), comments(id, user_id, body, created_at, profiles(username))'
 
 export async function fetchFeed(): Promise<FeedItem[]> {
   const { data, error } = await sb()
@@ -172,9 +172,14 @@ export async function fetchFriendLog(friendId: string): Promise<FeedItem[]> {
   fail(error)
   return (data ?? []) as unknown as FeedItem[]
 }
-export async function setLike(workoutId: string, userId: string, on: boolean) {
+export async function setReaction(workoutId: string, userId: string, emoji: string, on: boolean) {
   const q = sb().from('reactions')
-  fail((on ? await q.insert({ workout_id: workoutId, user_id: userId }) : await q.delete().eq('workout_id', workoutId).eq('user_id', userId)).error)
+  fail(
+    (on
+      ? await q.insert({ workout_id: workoutId, user_id: userId, emoji })
+      : await q.delete().eq('workout_id', workoutId).eq('user_id', userId).eq('emoji', emoji)
+    ).error,
+  )
 }
 export async function addComment(workoutId: string, userId: string, body: string) {
   fail((await sb().from('comments').insert({ workout_id: workoutId, user_id: userId, body })).error)

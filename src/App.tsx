@@ -37,7 +37,7 @@ export default function App() {
         {!data.ready ? (
           <p>Loading…</p>
         ) : route.name === 'home' ? (
-          <Home data={data} go={setRoute} />
+          <Home data={data} go={setRoute} signedIn={!!auth.profile} />
         ) : route.name === 'edit' ? (
           <Editor key={(route.id ?? 'new') + (route.date ?? '')} data={data} auth={auth} id={route.id} date={route.date} go={setRoute} />
         ) : route.name === 'social' ? (

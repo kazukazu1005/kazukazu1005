@@ -5,7 +5,7 @@ import Calendar from '../components/Calendar'
 import { describeSet } from '../format'
 import { toDateStr, weekStart, weekStreak, workoutVolume } from '../calc'
 
-export default function Home({ data, go }: { data: AppData; go: (r: Route) => void }) {
+export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Route) => void; signedIn: boolean }) {
   const todayStr = toDateStr(new Date())
   const [selected, setSelected] = useState(todayStr)
 
@@ -49,7 +49,7 @@ export default function Home({ data, go }: { data: AppData; go: (r: Route) => vo
           <div className="row spread">
             <h3>{w.title || 'Workout'}</h3>
             <span className="row">
-              {w.visibility === 'friends' && <span className={`badge${w.synced ? '' : ' plain'}`}>{w.synced ? 'Shared' : 'Share pending'}</span>}
+              {signedIn && <span className={`badge${w.synced ? '' : ' plain'}`}>{w.synced ? 'Shared' : 'Share pending'}</span>}
               <button className="btn secondary small" onClick={() => go({ name: 'edit', id: w.id })}>Edit</button>
             </span>
           </div>

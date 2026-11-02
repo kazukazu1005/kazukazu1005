@@ -138,7 +138,7 @@ function Feed({ me, onOpen }: { me: Profile; data: AppData; onOpen: (p: Profile)
       {error && <div role="alert" className="msg">{error}</div>}
       <button className="btn secondary small" onClick={load}>Refresh</button>
       {items === null && !error && <p>Loading…</p>}
-      {items?.length === 0 && <p className="sub">Nothing here yet. Tick “Share with friends” when you log a workout, and add friends in the next tab.</p>}
+      {items?.length === 0 && <p className="sub">Nothing here yet. Add friends in the next tab; every workout you save is shared with them automatically.</p>}
       {items?.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} onOpenAuthor={onOpen} />)}
     </>
   )

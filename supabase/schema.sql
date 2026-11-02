@@ -41,12 +41,20 @@ create table if not exists public.shared_workouts (
 create index if not exists shared_workouts_user_date_idx on public.shared_workouts (user_id, date desc);
 create index if not exists shared_workouts_date_idx on public.shared_workouts (date desc);
 
+-- Teams-style reactions: a user can add several different emoji to one workout.
 create table if not exists public.reactions (
   workout_id uuid not null references public.shared_workouts(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
+  emoji text not null default '👍',
   created_at timestamptz not null default now(),
-  primary key (workout_id, user_id)
+  primary key (workout_id, user_id, emoji)
 );
+-- Upgrade path for databases created with the older one-like-per-user layout.
+alter table public.reactions add column if not exists emoji text not null default '👍';
+alter table public.reactions drop constraint if exists reactions_pkey;
+alter table public.reactions add primary key (workout_id, user_id, emoji);
+alter table public.reactions drop constraint if exists reactions_emoji_check;
+alter table public.reactions add constraint reactions_emoji_check check (emoji in ('👍', '❤️', '😂', '😮', '😢', '💪', '🔥'));
 
 create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),

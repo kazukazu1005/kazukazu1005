@@ -29,10 +29,10 @@ export interface Workout {
   title: string
   note: string
   entries: Entry[]
-  /** 'friends' = shared with friends (needs sign-in). Missing = private. */
-  visibility?: 'private' | 'friends'
-  /** For 'friends' workouts: true once the latest version reached the server. */
+  /** True once the latest version of this workout is on the server (friends can see it). */
   synced?: boolean
+  /** True once a copy has ever been sent to the server, so deleting it must also delete the copy. */
+  everShared?: boolean
   createdAt: number
   updatedAt: number
 }
