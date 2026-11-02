@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Auth, Route } from '../App'
 import type { AppData } from '../data'
 import { db, uid } from '../db'
-import { detectPRs, formatPace, pace, toDateStr } from '../calc'
+import { detectPRs, isFilledSet, toDateStr } from '../calc'
 import { PARTS, newCustomExercise } from '../exercises'
 import { describeSet } from '../format'
 import { buildPayload, pushWorkout, removeShared } from '../social'
@@ -34,16 +34,13 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
     patchEntry(eid, (e) => ({ ...e, sets: e.sets.map((s) => (s.id === sid ? { ...s, ...p } : s)) }))
 
   const addExercise = (ex: Exercise) => {
-    const prev = lastRecord(data, ex.id, w.date, w.id)
-    const first: SetRec = prev ? { ...prev.sets[prev.sets.length - 1], id: uid(), warmup: false } : { id: uid() }
-    setW({ ...w, entries: [...w.entries, { id: uid(), exerciseId: ex.id, sets: [first] }] })
+    // A new exercise starts with 3 empty sets, ready to fill in.
+    const sets: SetRec[] = [{ id: uid() }, { id: uid() }, { id: uid() }]
+    setW({ ...w, entries: [...w.entries, { id: uid(), exerciseId: ex.id, sets }] })
     setPicker(false)
   }
 
-  const addSet = (e: Entry) => {
-    const last = e.sets[e.sets.length - 1]
-    patchEntry(e.id, (x) => ({ ...x, sets: [...x.sets, last ? { ...last, id: uid(), warmup: false } : { id: uid() }] }))
-  }
+  const addSet = (e: Entry) => patchEntry(e.id, (x) => ({ ...x, sets: [...x.sets, { id: uid() }] }))
 
   const canShare = sharingConfigured && !!auth.session && !!auth.profile
 
@@ -52,8 +49,12 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
     if (!/^\d{4}-\d{2}-\d{2}$/.test(w.date)) return setError('Please enter a date.')
     if (w.entries.length === 0) return setError('Add at least one exercise.')
 
+    // Empty sets are dropped; an exercise with no filled set is dropped too.
+    const entries = w.entries.map((e) => ({ ...e, sets: e.sets.filter(isFilledSet) })).filter((e) => e.sets.length > 0)
+    if (entries.length === 0) return setError('Enter at least one set (weight and reps).')
+
     // Every saved workout is shared with friends automatically (when signed in).
-    const next: Workout = { ...w, synced: false, updatedAt: Date.now() }
+    const next: Workout = { ...w, entries, synced: false, updatedAt: Date.now() }
     if (canShare) {
       try {
         await pushWorkout(auth.session!.user.id, next, buildPayload(next, data.exercises, data.workouts))
@@ -116,7 +117,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
 
             {e.sets.map((s, i) => (
               <div key={s.id}>
-                <div className={`set-row${s.warmup ? ' warm' : ''}`}>
+                <div className="set-row">
                   <span className="num">{i + 1}</span>
                   {ex.kind === 'weight' && (
                     <>
@@ -130,23 +131,11 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
                       <div />
                     </>
                   )}
-                  {ex.kind === 'cardio' && (
-                    <>
-                      <div><label className="sub" htmlFor={`t${s.id}`}>Minutes</label><input id={`t${s.id}`} type="number" inputMode="decimal" min="0" step="0.5" value={s.durationMin ?? ''} onChange={(ev) => patchSet(e.id, s.id, { durationMin: num(ev.target.value) })} /></div>
-                      <div><label className="sub" htmlFor={`d${s.id}`}>Distance (km)</label><input id={`d${s.id}`} type="number" inputMode="decimal" min="0" step="0.1" value={s.distanceKm ?? ''} onChange={(ev) => patchSet(e.id, s.id, { distanceKm: num(ev.target.value) })} /></div>
-                    </>
-                  )}
                   <button className="btn danger small" aria-label={`Delete set ${i + 1}`} onClick={() => patchEntry(e.id, (x) => ({ ...x, sets: x.sets.filter((y) => y.id !== s.id) }))}>Delete</button>
-                </div>
-                <div className="row" style={{ marginBottom: 8 }}>
-                  {ex.kind !== 'cardio' && (
-                    <label className="check"><input type="checkbox" checked={!!s.warmup} onChange={(ev) => patchSet(e.id, s.id, { warmup: ev.target.checked })} />Warm-up (not counted)</label>
-                  )}
-                  {ex.kind === 'cardio' && <span className="sub">Pace: {formatPace(pace(s.durationMin, s.distanceKm))} min/km</span>}
                 </div>
               </div>
             ))}
-            <button className="btn secondary block" onClick={() => addSet(e)}>Add set (copy previous)</button>
+            <button className="btn secondary block" onClick={() => addSet(e)}>Add set</button>
           </section>
         )
       })}
@@ -193,7 +182,7 @@ function Picker({ data, onPick, onClose }: { data: AppData; onPick: (e: Exercise
   }
   const create = async () => {
     if (!name.trim()) return
-    const ex = newCustomExercise(name, kind, kind === 'cardio' ? 'Cardio' : cPart)
+    const ex = newCustomExercise(name, kind, cPart)
     await db.customExercises.put(ex)
     onPick(ex)
   }
@@ -228,11 +217,11 @@ function Picker({ data, onPick, onClose }: { data: AppData; onPick: (e: Exercise
                 </label>
               ))}
             </fieldset>
-            {kind !== 'cardio' && (
+            {(
               <div className="field-group">
                 <div className="field" id="cp-label">Body part</div>
                 <div className="chips" role="group" aria-labelledby="cp-label">
-                  {PARTS.filter((p) => p !== 'Cardio').map((p) => (
+                  {PARTS.map((p) => (
                     <button key={p} className="chip" aria-pressed={cPart === p} onClick={() => setCPart(p)}>{p}</button>
                   ))}
                 </div>

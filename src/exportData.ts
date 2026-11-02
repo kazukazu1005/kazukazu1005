@@ -1,6 +1,5 @@
 import { PRESET_EXERCISES } from './exercises'
 import { db } from './db'
-import { formatPace, pace } from './calc'
 import type { Exercise, Workout } from './types'
 
 const FORMAT = 'kintore-memo'
@@ -38,17 +37,13 @@ const csvCell = (v: unknown) => {
 
 export function buildCsv(workouts: Workout[], custom: Exercise[]): string {
   const map = new Map([...PRESET_EXERCISES, ...custom].map((e) => [e.id, e]))
-  const rows = [['Date', 'Title', 'Exercise', 'Part', 'Set', 'Warm-up', 'Weight kg', 'Reps', 'Minutes', 'Distance km', 'Pace min/km']]
+  const rows = [['Date', 'Title', 'Exercise', 'Part', 'Set', 'Weight kg', 'Reps']]
   const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date))
   for (const w of sorted) {
     for (const e of w.entries) {
       const ex = map.get(e.exerciseId)
       e.sets.forEach((s, i) =>
-        rows.push([
-          w.date, w.title, ex?.name ?? e.exerciseId, ex?.part ?? '', String(i + 1), s.warmup ? '1' : '',
-          s.weight ?? '', s.reps ?? '', s.durationMin ?? '', s.distanceKm ?? '',
-          pace(s.durationMin, s.distanceKm) === null ? '' : formatPace(pace(s.durationMin, s.distanceKm)),
-        ] as string[]),
+        rows.push([w.date, w.title, ex?.name ?? e.exerciseId, ex?.part ?? '', String(i + 1), s.weight ?? '', s.reps ?? ''] as string[]),
       )
     }
   }

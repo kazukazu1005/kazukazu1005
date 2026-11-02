@@ -5,12 +5,12 @@ import { db } from './db'
 import { supabase } from './supabase'
 import type { Exercise, ExerciseKind, SetRec, Workout } from './types'
 
-export interface Profile { id: string; username: string; display_name: string }
+export interface Profile { id: string; username: string; display_name: string; avatar?: string | null }
 
 export interface SharedEntry { name: string; kind: ExerciseKind; part: string; sets: SetRec[]; prs: string[] }
 export interface SharedPayload { entries: SharedEntry[] }
 
-export interface FeedComment { id: string; user_id: string; body: string; created_at: string; profiles: { username: string } | null }
+export interface FeedComment { id: string; user_id: string; body: string; created_at: string; profiles: { username: string; avatar?: string | null } | null }
 export interface FeedItem {
   id: string
   user_id: string
@@ -18,7 +18,7 @@ export interface FeedItem {
   title: string
   note: string
   data: SharedPayload
-  profiles: { username: string; display_name: string } | null
+  profiles: { username: string; display_name: string; avatar?: string | null } | null
   reactions: { user_id: string; emoji: string; profiles: { username: string } | null }[]
   comments: FeedComment[]
 }
@@ -40,7 +40,7 @@ export function useAuth() {
 
   const loadProfile = useCallback(async (s: Session | null) => {
     if (!supabase || !s) return setProfile(null)
-    const { data } = await supabase.from('profiles').select('id, username, display_name').eq('id', s.user.id).maybeSingle()
+    const { data } = await supabase.from('profiles').select('id, username, display_name, avatar').eq('id', s.user.id).maybeSingle()
     setProfile(data as Profile | null)
   }, [])
 
@@ -78,9 +78,13 @@ export async function createProfile(username: string, displayName: string) {
   fail((await sb().rpc('create_profile', { p_username: username, p_display_name: displayName })).error)
 }
 
+export async function updateAvatar(userId: string, avatar: string | null) {
+  fail((await sb().from('profiles').update({ avatar }).eq('id', userId)).error)
+}
+
 // ---------- friends ----------
 export async function fetchFriends(myId: string): Promise<Profile[]> {
-  const { data, error } = await sb().from('profiles').select('id, username, display_name').neq('id', myId).order('username')
+  const { data, error } = await sb().from('profiles').select('id, username, display_name, avatar').neq('id', myId).order('username')
   fail(error)
   return (data ?? []) as Profile[]
 }
@@ -145,7 +149,7 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
 
 // ---------- feed ----------
 const FEED_SELECT =
-  'id, user_id, date, title, note, data, profiles(username, display_name), reactions(user_id, emoji, profiles(username)), comments(id, user_id, body, created_at, profiles(username))'
+  'id, user_id, date, title, note, data, profiles(username, display_name, avatar), reactions(user_id, emoji, profiles(username)), comments(id, user_id, body, created_at, profiles(username, avatar))'
 
 export async function fetchFeed(): Promise<FeedItem[]> {
   const { data, error } = await sb()

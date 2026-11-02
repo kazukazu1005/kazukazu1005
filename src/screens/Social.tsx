@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import type { Auth } from '../App'
 import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
+import Avatar from '../components/Avatar'
+import RefreshButton from '../components/RefreshButton'
 import SharedCard from '../components/SharedCard'
+import { fileToAvatar } from '../avatar'
 import { toDateStr } from '../calc'
 import {
   addFriend, createProfile, fetchFeed, fetchFriendLog, fetchFriends, fetchMyCode, regenerateCode, removeFriend,
-  signIn, signOut, signUp, type FeedItem, type Profile,
+  signIn, signOut, signUp, updateAvatar, type FeedItem, type Profile,
 } from '../social'
 import { sharingConfigured } from '../supabase'
 
@@ -135,8 +138,11 @@ function Feed({ me, onOpen }: { me: Profile; data: AppData; onOpen: (p: Profile)
 
   return (
     <>
+      <div className="row spread">
+        <h2 style={{ margin: 0 }}>Feed</h2>
+        <RefreshButton onRefresh={load} />
+      </div>
       {error && <div role="alert" className="msg">{error}</div>}
-      <button className="btn secondary small" onClick={load}>Refresh</button>
       {items === null && !error && <p>Loading…</p>}
       {items?.length === 0 && <p className="sub">Nothing here yet. Add friends in the next tab; every workout you save is shared with them automatically.</p>}
       {items?.map((it) => <SharedCard key={it.id} it={it} me={me} act={act} onOpenAuthor={onOpen} />)}
@@ -166,11 +172,7 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
     for (const it of items ?? []) m.set(it.date, [...(m.get(it.date) ?? []), it])
     return m
   }, [items])
-  const marks = (date: string) => {
-    const list = byDate.get(date) ?? []
-    const kinds = list.flatMap((w) => w.data.entries.map((e) => e.kind))
-    return { strength: kinds.some((k) => k !== 'cardio'), cardio: kinds.includes('cardio'), count: list.length }
-  }
+  const marks = (date: string) => ({ count: byDate.get(date)?.length ?? 0 })
   const day = byDate.get(selected) ?? []
   const selLabel = new Date(selected + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
   const name = friend.display_name || friend.username
@@ -179,9 +181,9 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
     <>
       <div className="row spread">
         <button className="btn secondary small" onClick={onBack}>‹ Back</button>
-        <button className="btn secondary small" onClick={load}>Refresh</button>
+        <RefreshButton onRefresh={load} />
       </div>
-      <h2 style={{ marginTop: 12 }}>{name} <span className="sub">@{friend.username}</span></h2>
+      <h2 className="who" style={{ marginTop: 12 }}><Avatar profile={friend} size={48} /><span>{name} <span className="sub">@{friend.username}</span></span></h2>
       {error && <div role="alert" className="msg">{error}</div>}
       {items === null && !error && <p>Loading…</p>}
       {items && (
@@ -223,7 +225,7 @@ function Friends({ me, auth, onOpen }: { me: Profile; auth: Auth; onOpen: (p: Pr
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Your invite code</h2>
-        <p className="sub">Send this to a friend. Anyone who enters it becomes your friend and can see workouts you share. Regenerate it if it leaks.</p>
+        <p className="sub">Send this to a friend. Anyone who enters it becomes your friend and can see every workout you save. Regenerate it if it leaks.</p>
         <p><code aria-label="Your invite code" style={{ fontSize: '1.25rem' }}>{code}</code></p>
         <div className="row">
           <button className="btn secondary small" onClick={() => navigator.clipboard?.writeText(code).then(() => setMsg({ ok: true, text: 'Copied.' }), () => setMsg({ ok: false, text: 'Could not copy.' }))}>Copy</button>
@@ -247,7 +249,7 @@ function Friends({ me, auth, onOpen }: { me: Profile; auth: Auth; onOpen: (p: Pr
         {friends.length === 0 && <p className="sub">No friends yet.</p>}
         {friends.map((f) => (
           <div key={f.id} className="row spread comment">
-            <span>{f.display_name || f.username} <span className="sub">@{f.username}</span></span>
+            <span className="who"><Avatar profile={f} size={36} /><span>{f.display_name || f.username} <span className="sub">@{f.username}</span></span></span>
             <span className="row">
               <button className="btn secondary small" onClick={() => onOpen(f)}>View log</button>
               <button className="btn danger small" onClick={() => confirm(`Remove @${f.username}? You will stop seeing each other's workouts.`) && run(() => removeFriend(me.id, f.id), 'Friend removed.')}>Remove</button>
@@ -257,8 +259,35 @@ function Friends({ me, auth, onOpen }: { me: Profile; auth: Auth; onOpen: (p: Pr
       </section>
 
       <section className="card">
+        <h2 style={{ marginTop: 0 }}>Profile</h2>
+        <div className="row" style={{ gap: 16 }}>
+          <Avatar profile={me} size={72} />
+          <div>
+            <div style={{ fontWeight: 600 }}>{me.display_name || me.username}</div>
+            <div className="sub">@{me.username} · {auth.session?.user.email}</div>
+          </div>
+        </div>
+        <div className="row" style={{ marginTop: 12 }}>
+          <label className="btn secondary small file-btn" style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+            {me.avatar ? 'Change photo' : 'Add photo'}
+            <input
+              className="visually-hidden"
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (!f) return
+                await run(async () => { await updateAvatar(me.id, await fileToAvatar(f)); await auth.refresh() }, 'Photo updated.')
+              }}
+            />
+          </label>
+          {me.avatar && <button className="btn danger small" onClick={() => run(async () => { await updateAvatar(me.id, null); await auth.refresh() }, 'Photo removed.')}>Remove photo</button>}
+        </div>
+      </section>
+
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>Account</h2>
-        <p className="sub">Signed in as @{me.username} ({auth.session?.user.email})</p>
         <button className="btn secondary" onClick={() => run(signOut, 'Signed out.')}>Sign out</button>
       </section>
     </>

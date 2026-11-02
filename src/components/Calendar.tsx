@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { monthGrid, toDateStr } from '../calc'
 
-export interface DayMark { strength: boolean; cardio: boolean; count: number }
+export interface DayMark { count: number }
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -55,17 +55,14 @@ export default function Calendar({
             >
               <span className="cal-num">{Number(c.slice(8))}</span>
               <span className="cal-dots" aria-hidden="true">
-                {k.strength && <i className="dot strength" />}
-                {k.cardio && <i className="dot cardio" />}
+                {k.count > 0 && <i className="dot strength" />}
               </span>
             </button>
           )
         })}
       </div>
-      <div className="row sub" style={{ marginTop: 4, gap: 16 }}>
-        <span><i className="dot strength" /> Strength</span>
-        <span><i className="dot cardio" /> Cardio</span>
-        <button className="btn secondary small" style={{ marginLeft: 'auto' }} onClick={goToday}>Today</button>
+      <div className="row" style={{ marginTop: 4, justifyContent: 'flex-end' }}>
+        <button className="btn secondary small" onClick={goToday}>Today</button>
       </div>
     </section>
   )

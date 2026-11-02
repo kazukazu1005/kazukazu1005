@@ -113,7 +113,6 @@ svg.chart { width: 100%; height: auto; }
 .cal-dots { display: flex; gap: 3px; height: 8px; }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
 .dot.strength { background: var(--ink); }
-.dot.cardio { background: var(--accent); }
 
 /* body-part picker */
 .parts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
@@ -149,3 +148,24 @@ button.link { background: none; border: 0; padding: 0; font: inherit; font-weigh
 .react-opt:hover { background: var(--hover); transform: scale(1.12); }
 .react-opt[aria-pressed='true'] { background: var(--accent-bg); }
 @media (prefers-reduced-motion: reduce) { .react-opt:hover { transform: none; } }
+
+/* refresh button */
+.refresh { display: inline-flex; align-items: center; gap: 4px; }
+.icon-btn {
+  width: var(--tap); height: var(--tap); display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--bg); color: var(--ink-sub); cursor: pointer;
+}
+.icon-btn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.icon-btn:disabled { cursor: progress; }
+svg.spin { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { svg.spin { animation-duration: 3s; } }
+
+/* avatar */
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 50%; object-fit: cover;
+  background: var(--hover); color: var(--ink-sub); font-weight: 600; line-height: 1; vertical-align: middle;
+}
+.who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+input[type='file'].visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.file-btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }

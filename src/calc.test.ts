@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { monthGrid, detectPRs, estimate1RM, formatPace, pace, statsFor, weekStreak } from './calc'
+import { detectPRs, estimate1RM, isFilledSet, monthGrid, statsFor, weekStreak } from './calc'
 import type { Exercise, Workout } from './types'
 
 const bench: Exercise = { id: 'bench', name: 'Bench', kind: 'weight', part: 'Chest' }
-const run: Exercise = { id: 'run', name: 'Run', kind: 'cardio', part: 'Cardio' }
 
 const wk = (id: string, date: string, exerciseId: string, sets: Workout['entries'][0]['sets']): Workout => ({
   id, date, title: '', note: '', createdAt: 0, updatedAt: 0,
@@ -16,28 +15,24 @@ describe('calc', () => {
     expect(estimate1RM(100, 3)).toBeCloseTo(110)
     expect(estimate1RM(0, 5)).toBe(0)
   })
-  it('pace', () => {
-    expect(pace(30, 5)).toBe(6)
-    expect(pace(undefined, 5)).toBeNull()
-    expect(formatPace(6.5)).toBe('6:30')
-    expect(formatPace(null)).toBe('-')
+  it('isFilledSet ignores empty rows', () => {
+    expect(isFilledSet({ id: 'a' })).toBe(false)
+    expect(isFilledSet({ id: 'a', weight: 0, reps: 0 })).toBe(false)
+    expect(isFilledSet({ id: 'a', reps: 8 })).toBe(true)
+    expect(isFilledSet({ id: 'a', weight: 60 })).toBe(true)
   })
-  it('warmup sets excluded from stats', () => {
-    const ws = [wk('1', '2026-01-01', 'bench', [{ id: 'a', weight: 200, reps: 1, warmup: true }, { id: 'b', weight: 60, reps: 10 }])]
+  it('stats sum every set', () => {
+    const ws = [wk('1', '2026-01-01', 'bench', [{ id: 'a', weight: 60, reps: 10 }, { id: 'b', weight: 50, reps: 10 }])]
     const [s] = statsFor('bench', ws)
     expect(s.maxWeight).toBe(60)
-    expect(s.volume).toBe(600)
+    expect(s.volume).toBe(1100)
+    expect(s.totalReps).toBe(20)
   })
   it('PR detection: first record is not a PR, later improvement is', () => {
     const w1 = wk('1', '2026-01-01', 'bench', [{ id: 'a', weight: 60, reps: 10 }])
     const w2 = wk('2', '2026-01-08', 'bench', [{ id: 'b', weight: 70, reps: 8 }])
     expect(detectPRs(w1.entries[0], bench, w1.date, [w1, w2], w1.id)).toEqual([])
     expect(detectPRs(w2.entries[0], bench, w2.date, [w1, w2], w2.id)).toEqual(['Est. 1RM', 'Max weight'])
-  })
-  it('cardio PR', () => {
-    const w1 = wk('1', '2026-01-01', 'run', [{ id: 'a', durationMin: 30, distanceKm: 5 }])
-    const w2 = wk('2', '2026-01-08', 'run', [{ id: 'b', durationMin: 28, distanceKm: 5.5 }])
-    expect(detectPRs(w2.entries[0], run, w2.date, [w1, w2], w2.id)).toEqual(['Longest distance', 'Best pace'])
   })
   it('weekStreak', () => {
     const ws = [

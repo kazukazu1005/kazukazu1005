@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AppData } from '../data'
 import { PARTS } from '../exercises'
-import { formatPace, statsFor, type ExerciseStat } from '../calc'
+import { statsFor, type ExerciseStat } from '../calc'
 
 interface Metric { key: string; label: string; unit: string; get: (s: ExerciseStat) => number | null; fmt?: (n: number) => string }
 
@@ -13,12 +13,7 @@ const METRICS: Record<string, Metric[]> = {
   ],
   bodyweight: [
     { key: 'reps', label: 'Max reps', unit: 'reps', get: (s) => s.maxReps },
-    { key: 'vol', label: 'Total reps', unit: 'reps', get: (s) => s.volume || null },
-  ],
-  cardio: [
-    { key: 'dist', label: 'Distance', unit: 'km', get: (s) => s.distance },
-    { key: 'time', label: 'Time', unit: 'min', get: (s) => s.duration },
-    { key: 'pace', label: 'Pace', unit: 'min/km', get: (s) => s.bestPace, fmt: formatPace },
+    { key: 'vol', label: 'Total reps', unit: 'reps', get: (s) => s.totalReps },
   ],
 }
 
@@ -63,7 +58,7 @@ export default function Progress({ data }: { data: AppData }) {
     return v && v > 0 ? [{ date: s.date, v }] : []
   })
   const fmt = metric.fmt ?? ((n: number) => String(Math.round(n * 10) / 10))
-  const best = points.length ? (metric.key === 'pace' ? Math.min(...points.map((p) => p.v)) : Math.max(...points.map((p) => p.v))) : null
+  const best = points.length ? (Math.max(...points.map((p) => p.v))) : null
 
   return (
     <>

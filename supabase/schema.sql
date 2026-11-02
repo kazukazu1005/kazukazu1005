@@ -9,6 +9,11 @@ create table if not exists public.profiles (
   display_name text not null default '' check (char_length(display_name) <= 40),
   created_at timestamptz not null default now()
 );
+-- Profile photo: a small (<= ~50 KB) JPEG data URL made in the browser.
+alter table public.profiles add column if not exists avatar text;
+alter table public.profiles drop constraint if exists profiles_avatar_check;
+alter table public.profiles add constraint profiles_avatar_check
+  check (avatar is null or (avatar like 'data:image/jpeg;base64,%' and char_length(avatar) <= 60000));
 
 -- Invite codes are private to their owner (separate table so friends can't read them).
 create table if not exists public.invite_codes (

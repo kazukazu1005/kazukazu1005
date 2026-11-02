@@ -1,26 +1,19 @@
 import { useState } from 'react'
-import { formatPace, pace } from '../calc'
+import Avatar from './Avatar'
 import { REACTIONS } from '../reactions'
 import type { FeedItem, Profile, SharedEntry } from '../social'
 import { addComment, deleteComment, setReaction } from '../social'
 
 export function describeShared(e: SharedEntry): string {
-  const sets = e.sets.filter((s) => !s.warmup)
-  if (e.kind === 'weight') return sets.map((s) => `${s.weight ?? 0}×${s.reps ?? 0}`).join('  ')
-  if (e.kind === 'bodyweight') return sets.map((s) => `${s.reps ?? 0}`).join('  ') + ' reps'
-  const km = sets.reduce((a, s) => a + (s.distanceKm ?? 0), 0)
-  const min = sets.reduce((a, s) => a + (s.durationMin ?? 0), 0)
-  return `${Math.round(km * 10) / 10} km · ${Math.round(min)} min · ${formatPace(pace(min, km))} /km`
+  if (e.kind === 'weight') return e.sets.map((s) => `${s.weight ?? 0}×${s.reps ?? 0}`).join('  ')
+  return e.sets.map((s) => `${s.reps ?? 0}`).join('  ') + ' reps'
 }
 
-/** Per-set lines for a shared entry (warm-ups marked). */
+/** Per-set line for a shared entry. */
 function setLine(e: SharedEntry, i: number): string {
   const s = e.sets[i]
-  const w = s.warmup ? ' (warm-up)' : ''
-  if (e.kind === 'weight') return `${s.weight ?? 0} kg × ${s.reps ?? 0}${w}`
-  if (e.kind === 'bodyweight') return `${s.reps ?? 0} reps${w}`
-  const p = pace(s.durationMin, s.distanceKm)
-  return `${s.distanceKm ?? 0} km · ${s.durationMin ?? 0} min${p === null ? '' : ` · ${formatPace(p)}/km`}`
+  if (e.kind === 'weight') return `${s.weight ?? 0} kg × ${s.reps ?? 0}`
+  return `${s.reps ?? 0} reps`
 }
 
 /** Teams-style reactions: one pill per emoji with a count, plus a "+" picker. */
@@ -101,16 +94,17 @@ export default function SharedCard({
   return (
     <article className="card" aria-label={`${author?.username ?? 'user'} ${it.date}`}>
       <div className="row spread">
-        <h3>
+        <h3 className="who">
+          <Avatar profile={author} size={32} />
           {onOpenAuthor && author && it.user_id !== me.id ? (
-            <button className="link" onClick={() => onOpenAuthor({ id: it.user_id, username: author.username, display_name: author.display_name })}>{name}</button>
+            <button className="link" onClick={() => onOpenAuthor({ id: it.user_id, username: author.username, display_name: author.display_name, avatar: author.avatar })}>{name}</button>
           ) : name}{' '}
           <span className="sub">@{author?.username}</span>
         </h3>
         <span className="sub">{it.date}</span>
       </div>
       {it.title && <p style={{ margin: '4px 0', fontWeight: 600 }}>{it.title}</p>}
-      {it.data.entries.map((e, i) => (
+      {it.data.entries.filter((e) => e.kind === 'weight' || e.kind === 'bodyweight').map((e, i) => (
         <div key={i} className={detail ? 'day-entry' : undefined} style={detail ? undefined : { margin: '6px 0' }}>
           <div className="row spread">
             <span>
@@ -129,7 +123,7 @@ export default function SharedCard({
       <ReactionBar it={it} me={me} act={act} />
       {it.comments.map((c) => (
         <div key={c.id} className="comment row spread">
-          <span><b>{c.profiles?.username ?? 'user'}</b> {c.body}</span>
+          <span className="who"><Avatar profile={c.profiles} size={20} /><span><b>{c.profiles?.username ?? 'user'}</b> {c.body}</span></span>
           {(c.user_id === me.id || it.user_id === me.id) && (
             <button className="btn danger small" aria-label="Delete comment" onClick={() => act(() => deleteComment(c.id))}>Delete</button>
           )}

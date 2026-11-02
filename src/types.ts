@@ -1,4 +1,4 @@
-export type ExerciseKind = 'weight' | 'bodyweight' | 'cardio'
+export type ExerciseKind = 'weight' | 'bodyweight'
 
 export interface Exercise {
   id: string
@@ -12,9 +12,6 @@ export interface SetRec {
   id: string
   weight?: number // kg
   reps?: number
-  durationMin?: number
-  distanceKm?: number
-  warmup?: boolean
 }
 
 export interface Entry {
@@ -40,5 +37,4 @@ export interface Workout {
 export const KIND_LABEL: Record<ExerciseKind, string> = {
   weight: 'Weights (kg × reps)',
   bodyweight: 'Bodyweight (reps)',
-  cardio: 'Cardio (time, distance)',
 }
