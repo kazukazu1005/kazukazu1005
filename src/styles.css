@@ -199,3 +199,7 @@ input[type='file'].visually-hidden { position: absolute; width: 1px; height: 1px
 .profile-btn:hover { border-color: var(--line); }
 .profile-btn[aria-current='page'] { border-color: var(--accent); }
 header.top { align-items: center; }
+
+/* keep the divider well below the reactions */
+.reactions + .comment { margin-top: 16px; padding-top: 12px; }
+.reactions:last-child { margin-bottom: 4px; }

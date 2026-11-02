@@ -39,7 +39,7 @@ function ReactionBar({ it, me, act }: { it: FeedItem; me: Profile; act: (f: () =
           className="react-pill"
           aria-pressed={g.mine}
           title={g.names.join(', ')}
-          aria-label={`${g.emoji} ${g.count}: ${g.names.join(', ')}. ${g.mine ? 'Remove your reaction' : 'React'}`}
+          aria-label={`${g.emoji} ${g.count}: ${g.names.join(', ')}. ${g.mine ? 'Remove your reaction' : 'Switch your reaction to this'}`}
           onClick={() => toggle(g.emoji, g.mine)}
         >
           <span aria-hidden="true">{g.emoji}</span> {g.count}

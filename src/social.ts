@@ -184,11 +184,15 @@ export async function fetchFriendLog(friendId: string): Promise<FeedItem[]> {
   fail(error)
   return (data ?? []) as unknown as FeedItem[]
 }
+/**
+ * One reaction per user per workout. Turning one on replaces any earlier choice (upsert on
+ * workout + user); turning it off removes it.
+ */
 export async function setReaction(workoutId: string, userId: string, emoji: string, on: boolean) {
   const q = sb().from('reactions')
   fail(
     (on
-      ? await q.insert({ workout_id: workoutId, user_id: userId, emoji })
+      ? await q.upsert({ workout_id: workoutId, user_id: userId, emoji }, { onConflict: 'workout_id,user_id' })
       : await q.delete().eq('workout_id', workoutId).eq('user_id', userId).eq('emoji', emoji)
     ).error,
   )
