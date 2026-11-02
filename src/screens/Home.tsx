@@ -65,11 +65,8 @@ export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Ro
         </article>
       ))}
       {dayWorkouts.length > 0 ? (
-        <>
-          {/* A workout already exists on this day: open it so you can carry on where you left off. */}
-          <button className="btn block" onClick={() => go({ name: 'edit', id: latestOfDay!.id })}>Continue this workout</button>
-          <button className="btn secondary block" style={{ marginTop: 8 }} onClick={() => go({ name: 'edit', date: selected })}>Start a separate workout</button>
-        </>
+        // A workout already exists on this day: open it so you can carry on where you left off.
+        <button className="btn block" onClick={() => go({ name: 'edit', id: latestOfDay!.id })}>Continue this workout</button>
       ) : (
         <button className="btn block" onClick={() => go({ name: 'edit', date: selected })}>
           {selected === todayStr ? 'Log a workout' : `Log a workout on ${selected.slice(5).replace('-', '/')}`}
