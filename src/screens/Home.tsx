@@ -3,7 +3,7 @@ import type { Route } from '../App'
 import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
 import { describeSet, fmtKg, setRM } from '../format'
-import { toDateStr, weekStart, weekStreak, workoutVolume } from '../calc'
+import { monthStats, toDateStr } from '../calc'
 
 export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Route) => void; signedIn: boolean }) {
   const todayStr = toDateStr(new Date())
@@ -17,10 +17,12 @@ export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Ro
 
   const marks = (date: string) => ({ count: byDate.get(date)?.length ?? 0 })
 
-  const ws = toDateStr(weekStart(new Date()))
-  const thisWeek = data.workouts.filter((w) => w.date >= ws)
-  const volume = thisWeek.reduce((a, w) => a + workoutVolume(w, data.exercises), 0)
-  const setsThisWeek = thisWeek.reduce((a, w) => a + w.entries.reduce((n, e) => n + e.sets.length, 0), 0)
+  // The summary follows the month showing in the calendar.
+  const [month, setMonth] = useState(() => ({ y: new Date().getFullYear(), m: new Date().getMonth() }))
+  const now = new Date()
+  const isThisMonth = month.y === now.getFullYear() && month.m === now.getMonth()
+  const monthTitle = isThisMonth ? 'This month' : new Date(month.y, month.m, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const stats = monthStats(data.workouts, data.exercises, month.y, month.m)
 
   const dayWorkouts = byDate.get(selected) ?? []
   const latestOfDay = [...dayWorkouts].sort((a, b) => b.updatedAt - a.updatedAt)[0]
@@ -28,7 +30,7 @@ export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Ro
 
   return (
     <>
-      <Calendar marks={marks} selected={selected} onSelect={setSelected} />
+      <Calendar marks={marks} selected={selected} onSelect={setSelected} onMonthChange={setMonth} />
 
       <h2>{selLabel}</h2>
       {dayWorkouts.length === 0 && <p className="sub">No workouts on this day.</p>}
@@ -73,13 +75,13 @@ export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Ro
         </button>
       )}
 
-      <section className="card" aria-labelledby="week" style={{ marginTop: 20 }}>
-        <h2 id="week" style={{ marginTop: 0 }}>This week</h2>
+      <section className="card" aria-labelledby="month" style={{ marginTop: 20 }}>
+        <h2 id="month" style={{ marginTop: 0 }}>{monthTitle}</h2>
         <div className="stats">
-          <div className="stat"><span className="sub">Workouts</span><b>{thisWeek.length}</b></div>
-          <div className="stat"><span className="sub">Week streak</span><b>{weekStreak(data.workouts)}</b></div>
-          <div className="stat"><span className="sub">Volume</span><b>{Math.round(volume).toLocaleString()} kg</b></div>
-          <div className="stat"><span className="sub">Sets</span><b>{setsThisWeek}</b></div>
+          <div className="stat"><span className="sub">Workouts</span><b>{stats.workouts}</b></div>
+          <div className="stat"><span className="sub">Active weeks</span><b>{stats.activeWeeks}</b></div>
+          <div className="stat"><span className="sub">Volume</span><b>{Math.round(stats.volume).toLocaleString()} kg</b></div>
+          <div className="stat"><span className="sub">Sets</span><b>{stats.sets}</b></div>
         </div>
       </section>
     </>

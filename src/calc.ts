@@ -128,3 +128,17 @@ export function monthGrid(year: number, month: number): (string | null)[] {
   while (cells.length % 7) cells.push(null)
   return cells
 }
+
+export interface MonthStats { workouts: number; sets: number; volume: number; activeWeeks: number }
+
+/** Totals for one calendar month (month is 0-11). Active weeks = Monday-start weeks with at least one workout. */
+export function monthStats(workouts: Workout[], exercises: Map<string, Exercise>, year: number, month: number): MonthStats {
+  const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`
+  const inMonth = workouts.filter((w) => w.date.startsWith(prefix))
+  return {
+    workouts: inMonth.length,
+    sets: inMonth.reduce((a, w) => a + w.entries.reduce((n, e) => n + e.sets.length, 0), 0),
+    volume: inMonth.reduce((a, w) => a + workoutVolume(w, exercises), 0),
+    activeWeeks: new Set(inMonth.map((w) => toDateStr(weekStart(new Date(w.date + 'T00:00:00'))))).size,
+  }
+}

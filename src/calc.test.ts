@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectPRs, estimate1RM, isFilledSet, monthGrid, new1RMRecord, statsFor, weekStreak } from './calc'
+import { detectPRs, estimate1RM, isFilledSet, monthGrid, monthStats, new1RMRecord, statsFor, weekStreak } from './calc'
 import type { Exercise, Workout } from './types'
 
 const bench: Exercise = { id: 'bench', name: 'Bench', kind: 'weight', part: 'Chest' }
@@ -62,5 +62,17 @@ describe('calc', () => {
     expect(new1RMRecord(better, bench, [])).toBeNull() // first record ever
     // editing the very workout that holds the best: lowering is no record, and the old value still counts
     expect(new1RMRecord(same, bench, [wk('2', '2026-01-02', 'bench', better.sets)])).toBeNull()
+  })
+  it('monthStats counts only the given month', () => {
+    const ex = new Map([[bench.id, bench]])
+    const ws = [
+      wk('1', '2026-10-30', 'bench', [{ id: 'a', weight: 100, reps: 10 }]), // October
+      wk('2', '2026-11-02', 'bench', [{ id: 'b', weight: 60, reps: 10 }, { id: 'c', weight: 60, reps: 8 }]), // Mon, week of 11/02
+      wk('3', '2026-11-04', 'bench', [{ id: 'd', weight: 50, reps: 10 }]), // same week
+      wk('4', '2026-11-16', 'bench', [{ id: 'e', weight: 50, reps: 10 }]), // another week
+    ]
+    expect(monthStats(ws, ex, 2026, 10)).toEqual({ workouts: 3, sets: 4, volume: 600 + 480 + 500 + 500, activeWeeks: 2 })
+    expect(monthStats(ws, ex, 2026, 9)).toEqual({ workouts: 1, sets: 1, volume: 1000, activeWeeks: 1 })
+    expect(monthStats(ws, ex, 2026, 0)).toEqual({ workouts: 0, sets: 0, volume: 0, activeWeeks: 0 })
   })
 })
