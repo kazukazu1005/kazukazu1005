@@ -47,21 +47,19 @@ export default function Calendar({
           return (
             <button
               key={c}
-              className="cal-day"
+              className={k.count > 0 ? 'cal-day trained' : 'cal-day'}
               aria-pressed={c === selected}
               aria-current={c === todayStr ? 'date' : undefined}
               aria-label={`${c}, ${k.count} ${k.count === 1 ? 'workout' : 'workouts'}`}
               onClick={() => onSelect(c)}
             >
               <span className="cal-num">{Number(c.slice(8))}</span>
-              <span className="cal-dots" aria-hidden="true">
-                {k.count > 0 && <i className="dot strength" />}
-              </span>
             </button>
           )
         })}
       </div>
-      <div className="row" style={{ marginTop: 4, justifyContent: 'flex-end' }}>
+      <div className="row spread" style={{ marginTop: 4 }}>
+        <span className="sub row" style={{ gap: 6 }}><i className="legend-dot" aria-hidden="true" />Trained</span>
         <button className="btn secondary small" onClick={goToday}>Today</button>
       </div>
     </section>
