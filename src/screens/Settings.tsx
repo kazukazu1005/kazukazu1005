@@ -4,6 +4,7 @@ import { db } from '../db'
 import { buildBackup, buildCsv, download, importBackup } from '../exportData'
 import { toDateStr } from '../calc'
 import { showToast } from '../toast'
+import { BUILD_TIME } from '../supabase'
 import { deleteCustomExercise, MAX_EXERCISE_NAME, renameCustomExercise, usageCount } from '../exerciseOps'
 import type { Exercise } from '../types'
 
@@ -106,6 +107,7 @@ export default function Settings({ data }: { data: AppData }) {
         <h2 style={{ marginTop: 0 }}>Delete everything</h2>
         <button className="btn danger" onClick={onDeleteAll}>Delete all local data</button>
       </section>
+      <p className="sub" style={{ textAlign: 'center' }}>Gym Bro · built {new Date(BUILD_TIME).toLocaleString()}</p>
     </>
   )
 }

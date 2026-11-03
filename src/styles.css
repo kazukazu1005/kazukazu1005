@@ -255,3 +255,6 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 .chart-col:focus-visible .chart-hit { stroke: var(--accent); stroke-width: 2; }
 .swatch { background: var(--bg); border-radius: 4px; padding: 0 2px; flex: none; }
 .metric-chip { display: inline-flex; align-items: center; gap: 8px; }
+
+ul.hint-list { margin: 0; padding-left: 1.25rem; }
+ul.hint-list li { margin-bottom: 4px; }

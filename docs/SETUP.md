@@ -47,6 +47,12 @@ Project Settings → **API**(または API Keys)
 
 (ローカルで試す場合は `.env.example` を `.env.local` にコピーして値を入れ、`npm run dev`。)
 
+### 「共有は設定されていません」と出るとき
+- Friends タブ(またはプロフィール)に、ビルドが受け取った設定の状態が出ます。`VITE_SUPABASE_URL` と `VITE_SUPABASE_ANON_KEY` が、それぞれ OK か Problem かを確認する。
+- Problem の場合は、Cloudflare の **Settings → Build → Variables and secrets** に、名前を正確に入れて保存し、**ビルドし直す**。
+- 「secret key」と出た場合は、サーバー用の秘密のキーを入れている。**publishable(anon)キー**に替える。
+- 画面の最下部(Settings)に出る「built …」の時刻で、新しい版が開けているか確認できる(古い版を覚えていることがある)。
+
 ## ⑦ 使い始める
 1. 自分のアプリの **Friends** タブでアカウント作成 → ユーザー名を決める。
 2. 「Your invite code」を友達にLINE等で送る。
