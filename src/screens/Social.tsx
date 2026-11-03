@@ -3,6 +3,7 @@ import type { Auth } from '../App'
 import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
 import Avatar from '../components/Avatar'
+import SetupHint from '../components/SetupHint'
 import RefreshButton from '../components/RefreshButton'
 import SharedCard from '../components/SharedCard'
 import { ProgressView } from './Progress'
@@ -25,6 +26,7 @@ export default function Social({ data, auth, seen, onSeen, onEditProfile }: { da
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Sharing is not set up</h2>
         <p>This build has no server settings, so the app works as a private log. See docs/SETUP.md to turn on friend sharing.</p>
+        <SetupHint />
       </section>
     )
   if (auth.loading) return <Loading />

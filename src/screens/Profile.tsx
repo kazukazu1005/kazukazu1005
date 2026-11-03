@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { Auth } from '../App'
 import type { AppData } from '../data'
 import Avatar from '../components/Avatar'
+import SetupHint from '../components/SetupHint'
 import { fileToAvatar } from '../avatar'
 import { weekStreak } from '../calc'
 import Loading from '../components/Loading'
@@ -18,6 +19,7 @@ export default function Profile({ data, auth }: { data: AppData; auth: Auth }) {
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Profile</h2>
         <p>Profiles are used for sharing with friends. This build has no server settings, so there is nothing to set up yet. See docs/SETUP.md.</p>
+        <SetupHint />
       </section>
     )
   if (auth.loading) return <Loading />
