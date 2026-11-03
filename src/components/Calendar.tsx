@@ -7,8 +7,8 @@ const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 /** Monthly calendar. Owns the visible month; the parent owns the selected day. */
 export default function Calendar({
-  marks, selected, onSelect, onMonthChange,
-}: { marks: (date: string) => DayMark; selected: string; onSelect: (date: string) => void; onMonthChange?: (ym: { y: number; m: number }) => void }) {
+  marks, selected, onSelect, onMonthChange, loading,
+}: { marks: (date: string) => DayMark; selected: string; onSelect: (date: string) => void; onMonthChange?: (ym: { y: number; m: number }) => void; loading?: boolean }) {
   const todayStr = toDateStr(new Date())
   const [ym, setYm] = useState(() => {
     const d = new Date(selected + 'T00:00:00')
@@ -38,7 +38,7 @@ export default function Calendar({
         <button className="btn secondary small" onClick={() => move(-1)} aria-label="Previous month">‹</button>
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ margin: 0 }} aria-live="polite">{label}</h2>
-          <span className="sub">{daysTrained} {daysTrained === 1 ? 'day' : 'days'} trained</span>
+          <span className="sub">{loading ? '\u00A0' : `${daysTrained} ${daysTrained === 1 ? 'day' : 'days'} trained`}</span>
         </div>
         <button className="btn secondary small" onClick={() => move(1)} aria-label="Next month">›</button>
       </div>
