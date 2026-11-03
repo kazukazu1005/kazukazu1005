@@ -147,7 +147,11 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
     if (w.synced) continue
     try {
       await pushWorkout(userId, w, buildPayload(w, exercises, workouts))
-      await db.workouts.update(w.id, { synced: true, everShared: true })
+      // Only mark it sent if it was not edited again while the upload was running.
+      await db.workouts.where('id').equals(w.id).modify((x) => {
+        x.everShared = true
+        if (x.updatedAt === w.updatedAt) x.synced = true
+      })
       n++
     } catch {
       break // offline or signed out; try again later

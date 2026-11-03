@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { Auth, Route } from '../App'
 import type { AppData } from '../data'
 import { db, uid } from '../db'
-import { detectPRs, isFilledSet, new1RMRecord, toDateStr } from '../calc'
+import { detectPRs, new1RMRecord, toDateStr } from '../calc'
 import { celebrate } from '../celebrate'
 import { PARTS, newCustomExercise } from '../exercises'
 import { clearDraft, hasContent, loadDraft, saveDraft } from '../draft'
-import { retargetEntry } from '../entryOps'
+import { cleanEntries, contentKey, retargetEntry } from '../entryOps'
 import { describeSet, fmtKg, setRM } from '../format'
 import { buildPayload, pushWorkout, removeShared } from '../social'
 import { sharingConfigured } from '../supabase'
@@ -26,43 +26,103 @@ function lastRecord(data: AppData, exerciseId: string, date: string, selfId: str
 
 export default function Editor({ data, auth, id, date, go }: { data: AppData; auth: Auth; id?: string; date?: string; go: (r: Route) => void }) {
   const existing = id ? data.workouts.find((w) => w.id === id) : undefined
-  const draftKey = id ?? 'new'
   const fresh = (): Workout => ({ id: uid(), date: date ?? toDateStr(new Date()), title: '', note: '', entries: [], createdAt: Date.now(), updatedAt: Date.now() })
 
-  // Unsaved input is kept on this device; reopen the screen and it comes back.
+  // A brand-new workout with nothing filled in yet is only kept as a draft; as soon as a set is
+  // filled in, everything is saved automatically (see below).
   const [start] = useState(() => {
-    const d = loadDraft(draftKey)
-    if (d && (!existing || existing.updatedAt <= d.base)) return { w: d.w, restored: true }
-    if (d) clearDraft(draftKey) // the workout changed since this draft was made
-    return { w: existing ?? fresh(), restored: false }
+    const d = existing ? null : loadDraft('new')
+    return d ? { w: d.w, restored: true } : { w: existing ?? fresh(), restored: false }
   })
   const [w, setW] = useState<Workout>(start.w)
   const [restored, setRestored] = useState(start.restored)
   const [picker, setPicker] = useState<{ entryId?: string } | null>(null)
   const [error, setError] = useState('')
+  const [savedOnce, setSavedOnce] = useState(!!existing)
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(existing ? 'saved' : 'idle')
 
   const latest = useRef(w)
   latest.current = w
-  const finished = useRef(false) // saved, deleted or discarded: stop keeping a draft
-  const persist = (x: Workout) => {
-    if (finished.current) return
-    const changed = existing ? JSON.stringify(x) !== JSON.stringify(existing) : hasContent(x)
-    if (changed) saveDraft(draftKey, x, existing?.updatedAt ?? 0)
-    else clearDraft(draftKey)
+  const dataRef = useRef(data)
+  dataRef.current = data
+  const opened = useRef(existing) // the saved version when this screen opened: the bar a new 1RM record must beat
+  const lastSaved = useRef(existing ? contentKey(existing) : '')
+  const finished = useRef(false) // left the screen, or deleted: stop saving
+  const celebrated = useRef(false)
+  const chain = useRef<Promise<void>>(Promise.resolve()) // saves run one at a time
+
+  /** Save what is filled in to this device. Sharing happens through the normal "send pending" step. */
+  const saveLocal = (x: Workout): Promise<void> => {
+    const key = contentKey(x)
+    const entries = cleanEntries(x.entries)
+    if (entries.length === 0 || key === lastSaved.current || !/^\d{4}-\d{2}-\d{2}$/.test(x.date)) return chain.current
+    lastSaved.current = key
+    setStatus('saving')
+    chain.current = chain.current.then(async () => {
+      try {
+        const row = await db.workouts.get(x.id)
+        await db.workouts.put({ ...x, entries, everShared: row?.everShared ?? x.everShared, synced: false, updatedAt: Date.now() })
+        setSavedOnce(true)
+        setStatus('saved')
+      } catch {
+        lastSaved.current = '' // try again on the next change
+        setStatus('error')
+      }
+    })
+    return chain.current
   }
+
+  // Autosave shortly after typing stops.
   useEffect(() => {
-    const t = setTimeout(() => persist(w), 300)
+    if (finished.current) return
+    const t = setTimeout(() => void saveLocal(w), 600)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [w])
-  useEffect(() => () => persist(latest.current), []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Drafts only matter for a new workout that has nothing filled in yet.
+  useEffect(() => {
+    if (existing || finished.current) return
+    const t = setTimeout(() => {
+      if (cleanEntries(w.entries).length > 0) clearDraft('new')
+      else if (hasContent(w) || w.entries.length > 0) saveDraft('new', w, 0)
+      else clearDraft('new')
+    }, 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w])
+
+  // A new personal best for estimated 1RM? Compare with the workouts as they were when this screen opened.
+  const celebrateRecords = (saved: Workout) => {
+    if (celebrated.current) return
+    const base = [...dataRef.current.workouts.filter((x) => x.id !== saved.id), ...(opened.current ? [opened.current] : [])]
+    const items = saved.entries.flatMap((e) => {
+      const ex = dataRef.current.exercises.get(e.exerciseId)
+      const r = ex ? new1RMRecord(e, ex, base) : null
+      return ex && r ? [{ name: ex.name, next: r.next, prev: r.prev, date: saved.date }] : []
+    })
+    if (items.length) {
+      celebrated.current = true
+      celebrate(items)
+    }
+  }
+
+  // Leaving the screen any other way (tab, back): write what is pending, and still celebrate a record.
+  useEffect(
+    () => () => {
+      if (finished.current) return
+      const x = latest.current
+      void saveLocal(x)
+      if (cleanEntries(x.entries).length > 0) celebrateRecords({ ...x, entries: cleanEntries(x.entries) })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
 
   const discardDraft = () => {
-    finished.current = true
-    clearDraft(draftKey)
-    setW(existing ?? fresh())
+    clearDraft('new')
+    setW(fresh())
     setRestored(false)
-    setTimeout(() => { finished.current = false }, 0)
   }
 
   const patchEntry = (eid: string, f: (e: Entry) => Entry) => setW({ ...w, entries: w.entries.map((e) => (e.id === eid ? f(e) : e)) })
@@ -85,34 +145,29 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
 
   const canShare = sharingConfigured && !!auth.session && !!auth.profile
 
+  /** "Done": make sure everything is saved (and sent, when signed in), then close. */
   const [saving, setSaving] = useState(false)
-  const save = async () => {
+  const done = async () => {
     if (saving) return
     setSaving(true)
-    try { await doSave() } finally { setSaving(false) }
+    try { await finish() } finally { setSaving(false) }
   }
 
-  // A new personal best for estimated 1RM? Compare with what was saved before this save.
-  const celebrateRecords = (saved: Workout) =>
-    celebrate(
-      saved.entries.flatMap((e) => {
-        const ex = data.exercises.get(e.exerciseId)
-        const r = ex ? new1RMRecord(e, ex, data.workouts) : null
-        return ex && r ? [{ name: ex.name, next: r.next, prev: r.prev, date: saved.date }] : []
-      }),
-    )
-
-  const doSave = async () => {
+  const finish = async () => {
     setError('')
+    await chain.current
+    const entries = cleanEntries(w.entries)
+    if (entries.length === 0) {
+      if (savedOnce) return setError('Enter at least one set (weight and reps), or delete this workout.')
+      finished.current = true // nothing was entered: just close
+      clearDraft('new')
+      return go({ name: 'home' })
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(w.date)) return setError('Please enter a date.')
-    if (w.entries.length === 0) return setError('Add at least one exercise.')
 
-    // Empty sets are dropped; an exercise with no filled set is dropped too.
-    const entries = w.entries.map((e) => ({ ...e, sets: e.sets.filter(isFilledSet) })).filter((e) => e.sets.length > 0)
-    if (entries.length === 0) return setError('Enter at least one set (weight and reps).')
-
-    // Every saved workout is shared with friends automatically (when signed in).
-    const next: Workout = { ...w, entries, synced: false, updatedAt: Date.now() }
+    const row = await db.workouts.get(w.id)
+    const next: Workout = { ...w, entries, everShared: row?.everShared ?? w.everShared, synced: false, updatedAt: Date.now() }
+    lastSaved.current = contentKey(next)
     if (canShare) {
       try {
         await pushWorkout(auth.session!.user.id, next, buildPayload(next, data.exercises, data.workouts))
@@ -120,16 +175,14 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
         next.everShared = true
       } catch (e) {
         await db.workouts.put(next)
-        finished.current = true
-        clearDraft(draftKey)
-        setW(next)
+        setSavedOnce(true)
         celebrateRecords(next)
         return setError(`Saved on this device, but sharing failed (it will retry later): ${e instanceof Error ? e.message : 'unknown error'}`)
       }
     }
     await db.workouts.put(next)
     finished.current = true
-    clearDraft(draftKey)
+    clearDraft('new')
     showToast(next.synced ? 'Saved and shared with friends' : 'Saved on this device')
     go({ name: 'home' })
     celebrateRecords(next)
@@ -137,25 +190,28 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
 
   const remove = async () => {
     if (!confirm('Delete this workout? Friends will no longer see it either. This cannot be undone.')) return
+    finished.current = true // stop autosaving, or it could bring the workout back
+    await chain.current
     // The shared copy must be removed first so it never stays visible by mistake.
-    if (sharingConfigured && (w.everShared || auth.session)) {
+    const row = await db.workouts.get(w.id)
+    if (sharingConfigured && (row?.everShared || w.everShared || auth.session)) {
       try {
         if (!auth.session) throw new Error('Sign in (Friends tab) to delete a workout that was shared.')
         await removeShared(w.id)
       } catch (e) {
+        finished.current = false
         return setError(`Could not remove the shared copy: ${e instanceof Error ? e.message : 'unknown error'}`)
       }
     }
     await db.workouts.delete(w.id)
-    finished.current = true
-    clearDraft(draftKey)
+    clearDraft('new')
     showToast('Workout deleted')
     go({ name: 'home' })
   }
 
   return (
     <>
-      <h2 style={{ marginTop: 0 }}>{existing ? 'Edit workout' : 'Log a workout'}</h2>
+      <h2 style={{ marginTop: 0 }}>{savedOnce ? 'Edit workout' : 'Log a workout'}</h2>
       {restored && (
         <div role="status" className="msg ok row spread">
           <span>Restored your unsaved input.</span>
@@ -237,9 +293,12 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
           {canShare ? 'Saved workouts are shared with your friends automatically.' : 'Sign in on the Friends tab to share your workouts with friends. Past ones are sent once you sign in.'}
         </p>
       )}
-      <div className="row" style={{ marginTop: 16 }}>
-        <button className="btn grow" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-        {existing && <button className="btn danger" onClick={remove}>Delete</button>}
+      <p className="sub" style={{ margin: '12px 0 0' }} role="status" aria-live="polite">
+        {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes are saved on this device.' : status === 'error' ? 'Could not save on this device. Try again.' : 'Whatever you fill in is saved automatically.'}
+      </p>
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="btn grow" onClick={done} disabled={saving}>{saving ? 'Saving…' : 'Done'}</button>
+        {savedOnce && <button className="btn danger" onClick={remove}>Delete</button>}
       </div>
 
       {picker && <Picker data={data} onPick={pickExercise} onClose={() => setPicker(null)} />}

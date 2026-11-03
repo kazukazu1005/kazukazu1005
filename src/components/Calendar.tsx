@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { monthGrid, toDateStr } from '../calc'
 
 export interface DayMark { count: number }
@@ -7,13 +7,16 @@ const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 /** Monthly calendar. Owns the visible month; the parent owns the selected day. */
 export default function Calendar({
-  marks, selected, onSelect,
-}: { marks: (date: string) => DayMark; selected: string; onSelect: (date: string) => void }) {
+  marks, selected, onSelect, onMonthChange,
+}: { marks: (date: string) => DayMark; selected: string; onSelect: (date: string) => void; onMonthChange?: (ym: { y: number; m: number }) => void }) {
   const todayStr = toDateStr(new Date())
   const [ym, setYm] = useState(() => {
     const d = new Date(selected + 'T00:00:00')
     return { y: d.getFullYear(), m: d.getMonth() }
   })
+
+  // Tell the parent which month is showing (also once at the start), so it can summarise that month.
+  useEffect(() => { onMonthChange?.(ym) }, [ym.y, ym.m]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const move = (delta: number) => {
     const d = new Date(ym.y, ym.m + delta, 1)
@@ -47,21 +50,20 @@ export default function Calendar({
           return (
             <button
               key={c}
-              className="cal-day"
+              className={k.count > 0 ? 'cal-day trained' : 'cal-day'}
               aria-pressed={c === selected}
               aria-current={c === todayStr ? 'date' : undefined}
               aria-label={`${c}, ${k.count} ${k.count === 1 ? 'workout' : 'workouts'}`}
               onClick={() => onSelect(c)}
             >
               <span className="cal-num">{Number(c.slice(8))}</span>
-              <span className="cal-dots" aria-hidden="true">
-                {k.count > 0 && <i className="dot strength" />}
-              </span>
+              <span className="cal-dots" aria-hidden="true">{k.count > 0 && <i className="tdot" />}</span>
             </button>
           )
         })}
       </div>
-      <div className="row" style={{ marginTop: 4, justifyContent: 'flex-end' }}>
+      <div className="row spread" style={{ marginTop: 4 }}>
+        <span className="sub row" style={{ gap: 6 }}><i className="tdot" aria-hidden="true" />Trained</span>
         <button className="btn secondary small" onClick={goToday}>Today</button>
       </div>
     </section>
