@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Toaster from './components/Toaster'
 import Celebration from './components/Celebration'
 import Loading from './components/Loading'
@@ -35,6 +35,18 @@ export default function App() {
   useEffect(() => {
     if (userId && auth.profile && data.ready && online) void syncPending(userId, data.workouts, data.exercises)
   }, [userId, auth.profile, data.ready, data.workouts, data.exercises, online])
+
+  // Keep trying while something is still unsent (a weak signal, for example).
+  const latestData = useRef(data)
+  latestData.current = data
+  useEffect(() => {
+    if (!userId || !auth.profile || !online) return
+    const t = setInterval(() => {
+      const d = latestData.current
+      if (d.ready && d.workouts.some((w) => !w.synced)) void syncPending(userId, d.workouts, d.exercises)
+    }, 30000)
+    return () => clearInterval(t)
+  }, [userId, auth.profile, online])
 
   const tabs: { key: Route['name']; label: string; to: Route }[] = [
     { key: 'home', label: 'Home', to: { name: 'home' } },

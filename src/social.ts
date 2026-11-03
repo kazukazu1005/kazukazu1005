@@ -141,21 +141,43 @@ export async function removeShared(id: string) {
 }
 
 /** Push workouts that haven't reached the server yet (saved offline or before signing in). */
+let syncing = false
+let queued: { userId: string; workouts: Workout[]; exercises: Map<string, Exercise> } | null = null
+
+/**
+ * Upload workouts that have not reached the server yet. Runs one pass at a time: a request that
+ * arrives meanwhile is remembered (newest wins) and run right after, so an older copy can never
+ * land on the server after a newer one.
+ */
 export async function syncPending(userId: string, workouts: Workout[], exercises: Map<string, Exercise>): Promise<number> {
+  if (syncing) {
+    queued = { userId, workouts, exercises }
+    return 0
+  }
+  syncing = true
   let n = 0
-  for (const w of workouts) {
-    if (w.synced) continue
-    try {
-      await pushWorkout(userId, w, buildPayload(w, exercises, workouts))
-      // Only mark it sent if it was not edited again while the upload was running.
-      await db.workouts.where('id').equals(w.id).modify((x) => {
-        x.everShared = true
-        if (x.updatedAt === w.updatedAt) x.synced = true
-      })
-      n++
-    } catch {
-      break // offline or signed out; try again later
+  try {
+    for (const w of workouts) {
+      if (w.synced) continue
+      try {
+        await pushWorkout(userId, w, buildPayload(w, exercises, workouts))
+        // Only mark it sent if it was not edited again while the upload was running.
+        await db.workouts.where('id').equals(w.id).modify((x) => {
+          x.everShared = true
+          if (x.updatedAt === w.updatedAt) x.synced = true
+        })
+        n++
+      } catch {
+        break // offline or signed out; try again later
+      }
     }
+  } finally {
+    syncing = false
+  }
+  if (queued) {
+    const q = queued
+    queued = null
+    n += await syncPending(q.userId, q.workouts, q.exercises)
   }
   return n
 }

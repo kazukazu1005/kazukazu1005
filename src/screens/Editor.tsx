@@ -8,7 +8,7 @@ import { PARTS, newCustomExercise } from '../exercises'
 import { clearDraft, hasContent, loadDraft, saveDraft } from '../draft'
 import { cleanEntries, contentKey, retargetEntry } from '../entryOps'
 import { describeSet, fmtKg, setRM } from '../format'
-import { buildPayload, pushWorkout, removeShared } from '../social'
+import { removeShared } from '../social'
 import { sharingConfigured } from '../supabase'
 import { showToast } from '../toast'
 import { KIND_LABEL, type Entry, type Exercise, type ExerciseKind, type SetRec, type Workout } from '../types'
@@ -75,7 +75,7 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
   // Autosave shortly after typing stops.
   useEffect(() => {
     if (finished.current) return
-    const t = setTimeout(() => void saveLocal(w), 600)
+    const t = setTimeout(() => void saveLocal(w), 300)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [w])
@@ -145,7 +145,10 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
 
   const canShare = sharingConfigured && !!auth.session && !!auth.profile
 
-  /** "Done": make sure everything is saved (and sent, when signed in), then close. */
+  /**
+   * "Done": write to this device and leave right away. Sending to friends happens in the background
+   * (the "send pending" step), so the screen never waits on the network.
+   */
   const [saving, setSaving] = useState(false)
   const done = async () => {
     if (saving) return
@@ -155,7 +158,6 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
 
   const finish = async () => {
     setError('')
-    await chain.current
     const entries = cleanEntries(w.entries)
     if (entries.length === 0) {
       if (savedOnce) return setError('Enter at least one set (weight and reps), or delete this workout.')
@@ -165,25 +167,18 @@ export default function Editor({ data, auth, id, date, go }: { data: AppData; au
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(w.date)) return setError('Please enter a date.')
 
+    finished.current = true // no more autosaves; this is the final write
+    await chain.current // let an autosave that is already running finish first
     const row = await db.workouts.get(w.id)
     const next: Workout = { ...w, entries, everShared: row?.everShared ?? w.everShared, synced: false, updatedAt: Date.now() }
-    lastSaved.current = contentKey(next)
-    if (canShare) {
-      try {
-        await pushWorkout(auth.session!.user.id, next, buildPayload(next, data.exercises, data.workouts))
-        next.synced = true
-        next.everShared = true
-      } catch (e) {
-        await db.workouts.put(next)
-        setSavedOnce(true)
-        celebrateRecords(next)
-        return setError(`Saved on this device, but sharing failed (it will retry later): ${e instanceof Error ? e.message : 'unknown error'}`)
-      }
+    try {
+      await db.workouts.put(next)
+    } catch {
+      finished.current = false
+      return setError('Could not save on this device. Please try again.')
     }
-    await db.workouts.put(next)
-    finished.current = true
     clearDraft('new')
-    showToast(next.synced ? 'Saved and shared with friends' : 'Saved on this device')
+    showToast(canShare ? 'Saved. Sending to friends…' : 'Saved on this device')
     go({ name: 'home' })
     celebrateRecords(next)
   }
