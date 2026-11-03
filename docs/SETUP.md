@@ -29,16 +29,21 @@ Project Settings → **API**(または API Keys)
 - `anon` / `publishable` key → `VITE_SUPABASE_ANON_KEY`
 - ⚠ `service_role` / `secret` キーは**絶対にアプリやGitHubに入れない**でください。anon キーは公開前提で、データの守りは schema.sql のRLSが担当します。
 
-## ⑥ 公開する(Cloudflare Pages・無料)
-1. https://dash.cloudflare.com → Workers & Pages → Create → **Pages** → Connect to Git → このリポジトリを選択。
-2. ブランチ: アプリのブランチ(`main` にマージ済みならそれ)。
-3. Build command: `npm run build` / Build output directory: `dist`
-4. Environment variables(Production)に追加:
+## ⑥ 公開する(Cloudflare・無料)
+リポジトリに `wrangler.jsonc` があるので、Cloudflare の「Workers」(Git 連携)でそのまま公開できます。
+
+1. https://dash.cloudflare.com → Workers & Pages → Create → **Import a repository**(Git に接続)→ このリポジトリを選択。
+2. プロジェクト名は **`kazukazu1005`**(`wrangler.jsonc` の `name` と同じにする。変えた場合は `wrangler.jsonc` の `name` も同じに直す)。
+3. Build command: `npm run build` / Deploy command: `npx wrangler deploy` / ブランチ: `main`
+4. **ビルド用の変数**に追加(Settings → Build → Variables and secrets):
    - `VITE_SUPABASE_URL` = ⑤のURL
    - `VITE_SUPABASE_ANON_KEY` = ⑤のanonキー
    - `NODE_VERSION` = `22`
-5. Deploy。発行された `https://○○.pages.dev` を友達に共有します。
+   - ※「Build」側の変数です。実行時の変数(Variables)ではなく、ビルドのときに読まれる欄に入れる。
+5. デプロイ。Settings → Domains & Routes で `workers.dev` の URL が有効になっていることを確認し、友達に共有する。
 6. スマホで開き「ホーム画面に追加」するとアプリのように使えます。
+
+(Pages プロジェクトで公開する場合は、Build command: `npm run build` / Build output directory: `dist` にして、同じ環境変数を入れる。)
 
 (ローカルで試す場合は `.env.example` を `.env.local` にコピーして値を入れ、`npm run dev`。)
 
