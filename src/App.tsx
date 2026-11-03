@@ -68,10 +68,11 @@ export default function App() {
       </header>
       {!online && <div className="offline" role="status">You are offline. Records are saved on this device and shared when you are back online.</div>}
       <main>
-        {!data.ready ? (
-          <Loading />
-        ) : route.name === 'home' ? (
+        {route.name === 'home' ? (
+          // The home screen does not wait for the data: it opens at once and fills in.
           <Home data={data} go={setRoute} signedIn={!!auth.profile} />
+        ) : !data.ready ? (
+          <Loading />
         ) : route.name === 'edit' ? (
           <Editor key={(route.id ?? 'new') + (route.date ?? '')} data={data} auth={auth} id={route.id} date={route.date} go={setRoute} />
         ) : route.name === 'social' ? (

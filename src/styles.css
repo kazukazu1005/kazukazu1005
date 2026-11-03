@@ -258,3 +258,9 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 
 ul.hint-list { margin: 0; padding-left: 1.25rem; }
 ul.hint-list li { margin-bottom: 4px; }
+
+/* placeholders while the saved records are being read */
+.skeleton { border-radius: var(--radius); background: linear-gradient(90deg, var(--hover) 0%, #f7f6f3 50%, var(--hover) 100%); background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite; margin-bottom: 12px; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.stats-loading b { color: transparent; background: var(--line); border-radius: 4px; display: inline-block; min-width: 3rem; }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
