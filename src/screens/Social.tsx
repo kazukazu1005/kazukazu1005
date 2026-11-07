@@ -4,11 +4,13 @@ import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
 import Avatar from '../components/Avatar'
 import SetupHint from '../components/SetupHint'
+import SharingCheck from '../components/SharingCheck'
 import RefreshButton from '../components/RefreshButton'
 import SharedCard from '../components/SharedCard'
 import { ProgressView } from './Progress'
 import { toProgressData } from '../friendProgress'
 import { toDateStr } from '../calc'
+import { useAutoRefresh } from '../autoRefresh'
 import Loading from '../components/Loading'
 import { showToast } from '../toast'
 import {
@@ -20,7 +22,7 @@ import { sharingConfigured } from '../supabase'
 const FEED_PAGE = 20
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.')
 
-export default function Social({ data, auth, seen, onSeen, onEditProfile }: { data: AppData; auth: Auth; seen: string | null; onSeen: (iso: string) => void; onEditProfile: () => void }) {
+export default function Social({ data, auth, seen, onSeen, unread, onEditProfile }: { data: AppData; auth: Auth; seen: string | null; onSeen: (iso: string) => void; unread: boolean; onEditProfile: () => void }) {
   if (!sharingConfigured)
     return (
       <section className="card">
@@ -32,7 +34,7 @@ export default function Social({ data, auth, seen, onSeen, onEditProfile }: { da
   if (auth.loading) return <Loading />
   if (!auth.session) return <AuthForm />
   if (!auth.profile) return <ProfileForm onDone={auth.refresh} />
-  return <SignedIn data={data} auth={auth} me={auth.profile} seen={seen} onSeen={onSeen} onEditProfile={onEditProfile} />
+  return <SignedIn data={data} auth={auth} me={auth.profile} seen={seen} onSeen={onSeen} unread={unread} onEditProfile={onEditProfile} />
 }
 
 export function AuthForm() {
@@ -110,7 +112,7 @@ export function ProfileForm({ onDone }: { onDone: () => Promise<void> }) {
   )
 }
 
-function SignedIn({ data, auth, me, seen, onSeen, onEditProfile }: { data: AppData; auth: Auth; me: Profile; seen: string | null; onSeen: (iso: string) => void; onEditProfile: () => void }) {
+function SignedIn({ data, auth, me, seen, onSeen, unread, onEditProfile }: { data: AppData; auth: Auth; me: Profile; seen: string | null; onSeen: (iso: string) => void; unread: boolean; onEditProfile: () => void }) {
   const [tab, setTab] = useState<'feed' | 'friends'>('feed')
   const [viewing, setViewing] = useState<Profile | null>(null)
   if (viewing) return <FriendLog me={me} friend={viewing} onBack={() => setViewing(null)} />
@@ -120,18 +122,23 @@ function SignedIn({ data, auth, me, seen, onSeen, onEditProfile }: { data: AppDa
         <button className="chip" aria-pressed={tab === 'feed'} onClick={() => setTab('feed')}>Feed</button>
         <button className="chip" aria-pressed={tab === 'friends'} onClick={() => setTab('friends')}>Friends & account</button>
       </div>
-      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} seen={seen} onSeen={onSeen} /> : <Friends me={me} auth={auth} onOpen={setViewing} onEditProfile={onEditProfile} />}
+      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} seen={seen} onSeen={onSeen} unread={unread} /> : <Friends me={me} auth={auth} data={data} onOpen={setViewing} onEditProfile={onEditProfile} />}
     </>
   )
 }
 
-function Feed({ me, onOpen, seen, onSeen }: { me: Profile; data: AppData; onOpen: (p: Profile) => void; seen: string | null; onSeen: (iso: string) => void }) {
+function Feed({ me, onOpen, seen, onSeen, unread }: { me: Profile; data: AppData; onOpen: (p: Profile) => void; seen: string | null; onSeen: (iso: string) => void; unread: boolean }) {
   const [items, setItems] = useState<FeedItem[] | null>(null)
   const [error, setError] = useState('')
   // Posts newer than what you had seen when you opened the feed get a "New" mark.
   const baseline = useRef<number | null>(null)
   const [limit, setLimit] = useState(FEED_PAGE)
-  const load = useCallback(async () => {
+  const inFlight = useRef(false)
+  const again = useRef(false)
+  /** `silent` = a background refresh: no error banner, and the list stays on screen while it loads. */
+  const load = useCallback(async (silent = false): Promise<void> => {
+    if (inFlight.current) { again.current = true; return } // one already running: read again right after it
+    inFlight.current = true
     try {
       const list = await fetchFeed(limit)
       if (baseline.current === null) baseline.current = seen === null ? Number.POSITIVE_INFINITY : Date.parse(seen)
@@ -140,11 +147,18 @@ function Feed({ me, onOpen, seen, onSeen }: { me: Profile; data: AppData; onOpen
       const newest = list.filter((i) => i.user_id !== me.id).map((i) => i.created_at).sort((a, b) => Date.parse(b) - Date.parse(a))[0]
       if (newest) onSeen(newest)
     } catch (e) {
-      setError(errText(e))
+      if (!silent) setError(errText(e))
+    } finally {
+      inFlight.current = false
+      if (again.current) { again.current = false; void load(true) }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me.id, limit])
   useEffect(() => { void load() }, [load])
+
+  // Keep it current while it is open: every 30 s, when you come back to the app, and when the tab's dot lights up.
+  useAutoRefresh(() => void load(true))
+  useEffect(() => { if (unread) void load(true) }, [unread]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (f: () => Promise<void>) => {
     try { await f(); await load() } catch (e) { setError(errText(e)) }
@@ -155,7 +169,7 @@ function Feed({ me, onOpen, seen, onSeen }: { me: Profile; data: AppData; onOpen
     <>
       <div className="row spread">
         <h2 style={{ margin: 0 }}>Feed</h2>
-        <RefreshButton onRefresh={load} />
+        <RefreshButton onRefresh={() => load()} />
       </div>
       {error && <div role="alert" className="msg">{error}</div>}
       {items === null && !error && <Loading />}
@@ -175,17 +189,25 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
   const [selected, setSelected] = useState(toDateStr(new Date()))
   const [full, setFull] = useState<Profile>(friend)
   const [view, setView] = useState<'calendar' | 'progress'>('calendar')
-  const load = useCallback(async () => {
+  const inFlight = useRef(false)
+  const again = useRef(false)
+  const load = useCallback(async (silent = false): Promise<void> => {
+    if (inFlight.current) { again.current = true; return }
+    inFlight.current = true
     try {
       const [list, prof] = await Promise.all([fetchFriendLog(friend.id), fetchProfile(friend.id)])
       if (prof) setFull(prof)
       setItems(list)
       setError('')
     } catch (e) {
-      setError(errText(e))
+      if (!silent) setError(errText(e))
+    } finally {
+      inFlight.current = false
+      if (again.current) { again.current = false; void load(true) }
     }
   }, [friend.id])
   useEffect(() => { void load() }, [load])
+  useAutoRefresh(() => void load(true))
   const act = async (f: () => Promise<void>) => {
     try { await f(); await load() } catch (e) { setError(errText(e)) }
   }
@@ -205,7 +227,7 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
     <>
       <div className="row spread">
         <button className="btn secondary small" onClick={onBack}>‹ Back</button>
-        <RefreshButton onRefresh={load} />
+        <RefreshButton onRefresh={() => load()} />
       </div>
       <h2 className="who" style={{ marginTop: 12 }}><Avatar profile={full} size={48} /><span>{name} <span className="sub">@{friend.username}</span></span></h2>
       {full.bio && <p style={{ margin: '0 0 4px', whiteSpace: 'pre-wrap' }}>{full.bio}</p>}
@@ -234,7 +256,7 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
   )
 }
 
-function Friends({ me, auth, onOpen, onEditProfile }: { me: Profile; auth: Auth; onOpen: (p: Profile) => void; onEditProfile: () => void }) {
+function Friends({ me, auth, data, onOpen, onEditProfile }: { me: Profile; auth: Auth; data: AppData; onOpen: (p: Profile) => void; onEditProfile: () => void }) {
   const [friends, setFriends] = useState<Profile[]>([])
   const [code, setCode] = useState('')
   const [input, setInput] = useState('')
@@ -292,6 +314,8 @@ function Friends({ me, auth, onOpen, onEditProfile }: { me: Profile; auth: Auth;
           </div>
         ))}
       </section>
+
+      <SharingCheck me={me} data={data} userId={me.id} />
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Account</h2>

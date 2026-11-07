@@ -76,7 +76,7 @@ export default function App() {
         ) : route.name === 'edit' ? (
           <Editor key={(route.id ?? 'new') + (route.date ?? '')} data={data} auth={auth} id={route.id} date={route.date} go={setRoute} />
         ) : route.name === 'social' ? (
-          <Social data={data} auth={auth} seen={activity.seen} onSeen={activity.markSeen} onEditProfile={() => setRoute({ name: 'profile' })} />
+          <Social data={data} auth={auth} seen={activity.seen} onSeen={activity.markSeen} unread={activity.unread} onEditProfile={() => setRoute({ name: 'profile' })} />
         ) : route.name === 'profile' ? (
           <Profile data={data} auth={auth} />
         ) : route.name === 'progress' ? (
