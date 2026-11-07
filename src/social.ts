@@ -247,3 +247,23 @@ export async function fetchLatestFriendPostTime(myId: string): Promise<string | 
   fail(error)
   return (data?.[0] as { created_at: string } | undefined)?.created_at ?? null
 }
+
+export interface SharingReport {
+  friends: number | string
+  mineOnServer: number | string
+  friendsOnServer: number | string
+}
+
+/** Counts that show where sharing stops: friends, my workouts on the server, friends' workouts I can see. */
+export async function diagnoseSharing(myId: string): Promise<SharingReport> {
+  const one = async (q: PromiseLike<{ count: number | null; error: { message: string } | null }>) => {
+    const { count, error } = await q
+    return error ? `error: ${error.message}` : (count ?? 0)
+  }
+  const [friends, mineOnServer, friendsOnServer] = await Promise.all([
+    one(sb().from('profiles').select('id', { count: 'exact', head: true }).neq('id', myId)),
+    one(sb().from('shared_workouts').select('id', { count: 'exact', head: true }).eq('user_id', myId)),
+    one(sb().from('shared_workouts').select('id', { count: 'exact', head: true }).neq('user_id', myId)),
+  ])
+  return { friends, mineOnServer, friendsOnServer }
+}

@@ -4,6 +4,7 @@ import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
 import Avatar from '../components/Avatar'
 import SetupHint from '../components/SetupHint'
+import SharingCheck from '../components/SharingCheck'
 import RefreshButton from '../components/RefreshButton'
 import SharedCard from '../components/SharedCard'
 import { ProgressView } from './Progress'
@@ -120,7 +121,7 @@ function SignedIn({ data, auth, me, seen, onSeen, onEditProfile }: { data: AppDa
         <button className="chip" aria-pressed={tab === 'feed'} onClick={() => setTab('feed')}>Feed</button>
         <button className="chip" aria-pressed={tab === 'friends'} onClick={() => setTab('friends')}>Friends & account</button>
       </div>
-      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} seen={seen} onSeen={onSeen} /> : <Friends me={me} auth={auth} onOpen={setViewing} onEditProfile={onEditProfile} />}
+      {tab === 'feed' ? <Feed me={me} data={data} onOpen={setViewing} seen={seen} onSeen={onSeen} /> : <Friends me={me} auth={auth} data={data} onOpen={setViewing} onEditProfile={onEditProfile} />}
     </>
   )
 }
@@ -234,7 +235,7 @@ function FriendLog({ me, friend, onBack }: { me: Profile; friend: Profile; onBac
   )
 }
 
-function Friends({ me, auth, onOpen, onEditProfile }: { me: Profile; auth: Auth; onOpen: (p: Profile) => void; onEditProfile: () => void }) {
+function Friends({ me, auth, data, onOpen, onEditProfile }: { me: Profile; auth: Auth; data: AppData; onOpen: (p: Profile) => void; onEditProfile: () => void }) {
   const [friends, setFriends] = useState<Profile[]>([])
   const [code, setCode] = useState('')
   const [input, setInput] = useState('')
@@ -292,6 +293,8 @@ function Friends({ me, auth, onOpen, onEditProfile }: { me: Profile; auth: Auth;
           </div>
         ))}
       </section>
+
+      <SharingCheck me={me} data={data} userId={me.id} />
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Account</h2>
