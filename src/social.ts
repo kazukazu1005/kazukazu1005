@@ -1,6 +1,8 @@
 import type { Session } from '@supabase/supabase-js'
 import { useCallback, useEffect, useState } from 'react'
 import { detectPRs } from './calc'
+import { joinProfiles, profileIds, type RawFeedRow } from './feedJoin'
+import { reportSync } from './syncStatus'
 import { db } from './db'
 import { supabase } from './supabase'
 import type { Exercise, ExerciseKind, SetRec, Workout } from './types'
@@ -167,7 +169,9 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
           if (x.updatedAt === w.updatedAt) x.synced = true
         })
         n++
-      } catch {
+        reportSync(null)
+      } catch (e) {
+        reportSync(e instanceof Error ? e.message : 'Unknown error')
         break // offline or signed out; try again later
       }
     }
@@ -183,8 +187,16 @@ export async function syncPending(userId: string, workouts: Workout[], exercises
 }
 
 // ---------- feed ----------
-const FEED_SELECT =
-  'id, user_id, created_at, date, title, note, data, profiles(username, display_name, avatar), reactions(user_id, emoji, profiles(username)), comments(id, user_id, body, created_at, profiles(username, avatar))'
+// No profiles(...) here: embedding it is ambiguous (see feedJoin.ts). Names and photos are fetched separately.
+const FEED_SELECT = 'id, user_id, created_at, date, title, note, data, reactions(user_id, emoji), comments(id, user_id, body, created_at)'
+
+async function withProfiles(rows: RawFeedRow[]): Promise<FeedItem[]> {
+  const ids = profileIds(rows)
+  if (ids.length === 0) return []
+  const { data, error } = await sb().from('profiles').select('id, username, display_name, avatar').in('id', ids)
+  fail(error)
+  return joinProfiles(rows, (data ?? []) as Profile[])
+}
 
 export async function fetchFeed(limit: number): Promise<FeedItem[]> {
   const { data, error } = await sb()
@@ -192,10 +204,9 @@ export async function fetchFeed(limit: number): Promise<FeedItem[]> {
     .select(FEED_SELECT)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
-    .order('created_at', { referencedTable: 'comments', ascending: true })
     .limit(limit)
   fail(error)
-  return (data ?? []) as unknown as FeedItem[]
+  return withProfiles((data ?? []) as unknown as RawFeedRow[])
 }
 
 /** Every workout a friend has shared (newest first). RLS only returns rows if you are friends. */
@@ -206,10 +217,9 @@ export async function fetchFriendLog(friendId: string): Promise<FeedItem[]> {
     .eq('user_id', friendId)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
-    .order('created_at', { referencedTable: 'comments', ascending: true })
     .limit(1000)
   fail(error)
-  return (data ?? []) as unknown as FeedItem[]
+  return withProfiles((data ?? []) as unknown as RawFeedRow[])
 }
 /**
  * One reaction per user per workout. Turning one on replaces any earlier choice (upsert on

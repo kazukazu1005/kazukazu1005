@@ -4,9 +4,11 @@ import type { AppData } from '../data'
 import Calendar from '../components/Calendar'
 import { describeSet, fmtKg, setRM } from '../format'
 import { monthStats, toDateStr } from '../calc'
+import { useSyncError } from '../syncStatus'
 
 export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Route) => void; signedIn: boolean }) {
   const todayStr = toDateStr(new Date())
+  const syncError = useSyncError()
   const [selected, setSelected] = useState(todayStr)
 
   const byDate = useMemo(() => {
@@ -30,6 +32,12 @@ export default function Home({ data, go, signedIn }: { data: AppData; go: (r: Ro
 
   return (
     <>
+      {signedIn && syncError && (
+        <div role="alert" className="msg">
+          Some workouts could not be sent to your friends yet. They will be tried again automatically.
+          <div className="sub">Reason: {syncError}</div>
+        </div>
+      )}
       <Calendar marks={marks} selected={selected} onSelect={setSelected} onMonthChange={setMonth} loading={!data.ready} />
 
       <h2>{selLabel}</h2>
